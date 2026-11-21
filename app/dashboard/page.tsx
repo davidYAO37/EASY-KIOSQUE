@@ -20,7 +20,18 @@ interface TB {
   };
   serie7j: { date: string; ca: number; nb: number }[];
   parKiosque: { kiosqueId: string; designation: string; ca: number; nbVentes: number; depenses: number }[];
+  parMode: { mode: string; montant: number; nb: number }[];
   topProduits: { designation: string; quantite: number; montant: number }[];
+}
+
+const COULEURS_MODE = ['var(--ek-green)', '#14213d', '#f59e0b', '#64748b', '#0d9488', '#dc2626'];
+
+function iconeMode(mode: string): string {
+  const m = mode.toLowerCase();
+  if (m.includes('esp')) return 'bi-cash';
+  if (m.includes('créd') || m.includes('cred')) return 'bi-credit-card';
+  if (m.includes('carte') || m.includes('chèque') || m.includes('cheque')) return 'bi-credit-card-2-front';
+  return 'bi-phone'; // Wave, Orange Money, MTN MoMo…
 }
 
 /**
@@ -144,6 +155,43 @@ export default function DashboardPage() {
           )}
         </div>
       )}
+
+      {/* Encaissements par mode de paiement — aujourd'hui */}
+      {(tb?.parMode?.length || 0) > 0 && (() => {
+        const totalModes = tb!.parMode.reduce((s, m) => s + m.montant, 0);
+        return (
+          <div className="card mb-4">
+            <div className="card-header bg-white fw-semibold">
+              <i className="bi bi-wallet2 me-2"></i>Encaissements par mode de paiement — aujourd&apos;hui
+            </div>
+            <div className="card-body">
+              <div className="progress mb-3" style={{ height: 22 }}>
+                {tb!.parMode.map((m, i) => (
+                  <div key={m.mode} className="progress-bar" role="progressbar"
+                    style={{ width: `${totalModes ? (m.montant / totalModes) * 100 : 0}%`, background: COULEURS_MODE[i % COULEURS_MODE.length] }}
+                    title={`${m.mode} : ${fmtMontant(m.montant)} F`} />
+                ))}
+              </div>
+              <div className="d-flex flex-wrap gap-3">
+                {tb!.parMode.map((m, i) => (
+                  <div key={m.mode} className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2">
+                    <span className="d-inline-flex align-items-center justify-content-center rounded-2 text-white"
+                      style={{ width: 34, height: 34, background: COULEURS_MODE[i % COULEURS_MODE.length] }}>
+                      <i className={`bi ${iconeMode(m.mode)}`}></i>
+                    </span>
+                    <div>
+                      <div className="small text-muted">{m.mode} · {m.nb} encaissement{m.nb > 1 ? 's' : ''}</div>
+                      <div className="fw-bold">{fmtMontant(m.montant)} F
+                        <span className="fw-normal small text-muted"> ({totalModes ? Math.round((m.montant / totalModes) * 100) : 0}%)</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="row g-3 mb-4">
         {/* Courbe CA 7 jours */}

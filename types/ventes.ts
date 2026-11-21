@@ -98,6 +98,6 @@ export interface TicketVente {
   };
   kiosque: { code: string; designation: string; adresse?: string };
   vente: VenteDTO;
-  /** Préférence d'impression de l'entreprise (imprimante + format). */
-  impression?: { imprimanteDefaut?: string; format?: "thermique80" | "a4" };
+  /** Préférence d'impression de l'entreprise (imprimante + format + auto). */
+  impression?: { imprimanteDefaut?: string; format?: "thermique80" | "a4"; impressionAuto?: boolean };
 }

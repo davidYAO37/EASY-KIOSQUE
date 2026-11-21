@@ -25,9 +25,11 @@ export interface IEntreprise extends Document {
   abonnementExpireLe?: Date;
 
   // Impression : imprimante par défaut + format des tickets/reçus
+  // impressionAuto : imprime le ticket automatiquement à la validation d'une vente
   impression?: {
     imprimanteDefaut?: string;
     format?: "thermique80" | "a4";
+    impressionAuto?: boolean;
   };
 
   createdAt?: Date;
@@ -53,6 +55,7 @@ const EntrepriseSchema = new Schema<IEntreprise>(
     impression: {
       imprimanteDefaut: { type: String },
       format: { type: String, enum: ["thermique80", "a4"], default: "thermique80" },
+      impressionAuto: { type: Boolean, default: false },
     },
   },
   { timestamps: true, collection: "entreprises" }

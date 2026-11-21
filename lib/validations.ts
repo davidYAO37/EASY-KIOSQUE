@@ -37,6 +37,7 @@ export const entrepriseUpdateSchema = z.object({
     .object({
       imprimanteDefaut: z.string().trim().max(120).optional().or(z.literal("")),
       format: z.enum(["thermique80", "a4"]).optional(),
+      impressionAuto: z.boolean().optional(),
     })
     .optional(),
 });

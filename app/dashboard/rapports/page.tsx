@@ -50,7 +50,10 @@ function RapportsInner() {
       ? `/api/rapports/credits?${fKiosque ? `kiosqueId=${fKiosque}` : ''}`
       : `/api/rapports/${onglet}?${params}`;
     axios.get(url, { withCredentials: true })
-      .then((res) => setData(res.data))
+      // `_onglet` marque la réponse : le rendu n'utilise les données que si
+      // elles correspondent à l'onglet affiché (changement d'onglet ou
+      // réponse arrivée en retard → pas de crash sur la mauvaise forme).
+      .then((res) => setData({ ...res.data, _onglet: onglet }))
       .catch(() => setData(null))
       .finally(() => setChargement(false));
   }, [onglet, du, au, fKiosque]);
@@ -114,7 +117,7 @@ function RapportsInner() {
       {!chargement && !data && <div className="alert alert-warning">Aucune donnée pour cette période.</div>}
 
       {/* ---------- VENTES ---------- */}
-      {!chargement && onglet === 'ventes' && data?.totaux && (
+      {!chargement && onglet === 'ventes' && data?._onglet === 'ventes' && data?.totaux && (
         <>
           <Row className="g-3 mb-3">
             {[
@@ -196,6 +199,31 @@ function RapportsInner() {
             </Col>
             <Col lg={5}>
               <Card className="mb-3">
+                <Card.Header className="bg-white fw-semibold">Encaissements par mode de paiement</Card.Header>
+                <Table responsive hover size="sm" className="mb-0">
+                  <thead className="table-light">
+                    <tr><th>Mode</th><th className="text-end">Nb</th><th className="text-end">Montant</th><th className="text-end">%</th></tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const modes = data.parMode || [];
+                      const total = modes.reduce((s: number, m: any) => s + m.montant, 0);
+                      if (modes.length === 0) {
+                        return <tr><td colSpan={4} className="text-center text-muted small">Aucun encaissement sur la période</td></tr>;
+                      }
+                      return modes.map((m: any) => (
+                        <tr key={m.mode}>
+                          <td>{m.mode}</td>
+                          <td className="text-end">{m.nb}</td>
+                          <td className="text-end fw-semibold">{fmtMontant(m.montant)}</td>
+                          <td className="text-end">{total ? Math.round((m.montant / total) * 100) : 0}%</td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </Table>
+              </Card>
+              <Card className="mb-3">
                 <Card.Header className="bg-white fw-semibold">Par vendeur</Card.Header>
                 <Table responsive hover size="sm" className="mb-0">
                   <thead className="table-light">
@@ -235,7 +263,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- COMPARAISON KIOSQUES ---------- */}
-      {!chargement && onglet === 'kiosques' && data?.kiosques && (
+      {!chargement && onglet === 'kiosques' && data?._onglet === 'kiosques' && data?.kiosques && (
         <>
           <Card className="mb-3">
             <Card.Header className="bg-white fw-semibold">Chiffre d&apos;affaires et résultat net par kiosque</Card.Header>
@@ -287,7 +315,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- DÉPENSES ---------- */}
-      {!chargement && onglet === 'depenses' && data?.totaux && (
+      {!chargement && onglet === 'depenses' && data?._onglet === 'depenses' && data?.totaux && (
         <Row className="g-3">
           <Col lg={7}>
             <Card className="mb-3">
@@ -336,7 +364,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- CRÉANCES ---------- */}
-      {!chargement && onglet === 'credits' && data?.totaux && (
+      {!chargement && onglet === 'credits' && data?._onglet === 'credits' && data?.totaux && (
         <Row className="g-3">
           <Col lg={8}>
             <Card>
@@ -379,7 +407,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- CAISSES ---------- */}
-      {!chargement && onglet === 'caisses' && data?.sessions && (
+      {!chargement && onglet === 'caisses' && data?._onglet === 'caisses' && data?.sessions && (
         <Card>
           <Card.Header className="bg-white fw-semibold d-flex justify-content-between">
             <span>Sessions de caisse</span>

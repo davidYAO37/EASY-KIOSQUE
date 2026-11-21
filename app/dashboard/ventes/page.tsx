@@ -79,8 +79,19 @@ function PosInner() {
   // Validation + ticket
   const [enCours, setEnCours] = useState(false);
   const [ticket, setTicket] = useState<TicketData | null>(null);
+  // Impression automatique : le ticket est rendu HORS ÉCRAN et imprimé
+  // directement — jamais de modale d'aperçu dans ce mode.
+  const [ticketAuto, setTicketAuto] = useState<TicketData | null>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
+  const ticketAutoRef = useRef<HTMLDivElement>(null);
   const imprimer = useReactToPrint({ contentRef: ticketRef });
+  const imprimerAuto = useReactToPrint({ contentRef: ticketAutoRef });
+  useEffect(() => {
+    if (!ticketAuto) return;
+    const id = window.setTimeout(() => imprimerAuto(), 250);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketAuto]);
 
   // Clé d'idempotence : une par panier, régénérée après chaque vente —
   // interdit la double validation même en cas de double-clic ou renvoi.
@@ -247,10 +258,22 @@ function PosInner() {
       );
       const vente = res.data.vente;
       toast.success(`Vente ${vente.numeroVente} enregistrée`);
-      // Ticket
-      const t = await axios.get(`/api/ventes/${vente._id}/ticket`, { withCredentials: true });
-      setTicket(t.data.ticket);
+      // On vide le panier tout de suite : la vente est validée côté serveur,
+      // un second clic ne doit plus rien renvoyer pendant la suite.
       vider();
+      // Ticket chargé à part : son échec ou sa lenteur ne doit JAMAIS
+      // ressembler à un échec de vente (la vente est déjà enregistrée).
+      try {
+        const t = await axios.get(`/api/ventes/${vente._id}/ticket`, { withCredentials: true, timeout: 20000 });
+        // Réglage entreprise : impression directe sans aperçu, sinon modale.
+        if (t.data?.ticket?.impression?.impressionAuto) {
+          setTicketAuto(t.data.ticket);
+        } else {
+          setTicket(t.data.ticket);
+        }
+      } catch {
+        toast.warning("Ticket indisponible pour l'instant — réimprimez-le depuis « Mes ventes / historique ».");
+      }
     } catch (e: any) {
       // Erreur réseau sans réponse serveur (coupure en pleine requête) :
       // file hors-ligne — l'idempotence évite le doublon si la requête
@@ -619,6 +642,19 @@ function PosInner() {
                   <><i className="bi bi-check2-circle me-2"></i>Valider la vente</>
                 )}
               </Button>
+              {/* Pourquoi le bouton est grisé — le clic sur un bouton désactivé
+                  ne fait rien : il faut dire à l'opérateur ce qui manque. */}
+              {!enCours && (chargKiosques || panier.length === 0 || caisseOuverte === false || !kiosqueId) && (
+                <div className="small text-muted text-center mt-2">
+                  {chargKiosques
+                    ? 'Chargement des kiosques…'
+                    : !kiosqueId
+                      ? 'Sélectionnez un kiosque pour vendre.'
+                      : caisseOuverte === false
+                        ? 'Ouvrez la caisse du kiosque pour vendre.'
+                        : 'Ajoutez des produits au panier.'}
+                </div>
+              )}
             </Card.Body>
           </Card>
         </Col>
@@ -649,6 +685,11 @@ function PosInner() {
           <Button variant="primary" size="sm" onClick={creerClient}>Créer</Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Ticket hors-écran — impression directe sans aperçu */}
+      <div style={{ position: 'fixed', left: -10000, top: 0, pointerEvents: 'none' }} aria-hidden="true">
+        {ticketAuto && <TicketVente ref={ticketAutoRef} ticket={ticketAuto} />}
+      </div>
 
       {/* Modale ticket */}
       <Modal show={!!ticket} onHide={() => setTicket(null)} centered>

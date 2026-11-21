@@ -18,7 +18,7 @@ interface Entreprise {
   pays?: string;
   devise?: string;
   statut?: string;
-  impression?: { imprimanteDefaut?: string; format?: string };
+  impression?: { imprimanteDefaut?: string; format?: string; impressionAuto?: boolean };
   createdAt?: string;
 }
 
@@ -77,6 +77,7 @@ function EntrepriseInner() {
         impression: {
           imprimanteDefaut: form.impression?.imprimanteDefaut || '',
           format: form.impression?.format || 'thermique80',
+          impressionAuto: !!form.impression?.impressionAuto,
         },
       }, { withCredentials: true });
       setEntreprise(res.data?.entreprise || null);
@@ -208,6 +209,23 @@ function EntrepriseInner() {
                 </Form.Group>
               </div>
             </div>
+            <Form.Check
+              type="switch"
+              id="impression-auto"
+              label="Imprimer directement le ticket à la validation d'une vente (sans aperçu)"
+              checked={!!form.impression?.impressionAuto}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  impression: { ...f.impression, impressionAuto: e.target.checked },
+                }))
+              }
+              disabled={!peutModifier}
+              className="mb-2"
+            />
+            <Form.Text className="text-muted d-block mb-2">
+              La boîte de dialogue d'impression s'ouvre directement, sans afficher le ticket à l'écran — le vendeur n'a qu'à confirmer. S'applique à tous les kiosques.
+            </Form.Text>
 
             <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2">
               <small className="text-muted">

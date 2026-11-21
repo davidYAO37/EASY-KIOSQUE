@@ -92,6 +92,24 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
     },
   ]);
 
+  // Encaissements du jour par mode de paiement (ventes + remboursements
+  // de créances ; hors paiements annulés). Vendeur/caissier : ses
+  // encaissements seulement (`recuPar`).
+  const parModeRaw = await Paiement.aggregate([
+    {
+      $match: {
+        entrepriseId: eid,
+        kiosqueId: { $in: ids },
+        statut: "valide",
+        type: { $ne: "annulation_vente" },
+        datePaiement: jour,
+        ...(controleur ? {} : { recuPar: oid(user._id) }),
+      },
+    },
+    { $group: { _id: "$mode", montant: { $sum: "$montant" }, nb: { $sum: 1 } } },
+    { $sort: { montant: -1 } },
+  ]);
+
   // Remboursements de créances encaissés aujourd'hui
   const [rmbJour] = controleur
     ? await Remboursement.aggregate([
@@ -219,6 +237,7 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
     },
     serie7j,
     parKiosque,
+    parMode: parModeRaw.map((m) => ({ mode: m._id || "Autre", montant: m.montant, nb: m.nb })),
     topProduits: topRaw.map((t) => ({ designation: t._id, quantite: t.quantite, montant: t.montant })),
   };
 }
@@ -238,7 +257,7 @@ export async function rapportVentes(
     dateVente: plage(f.du, f.au),
   };
 
-  const [parJour, parKiosque, parVendeur, totaux] = await Promise.all([
+  const [parJour, parKiosque, parVendeur, totaux, parMode] = await Promise.all([
     Vente.aggregate([
       { $match: match },
       {
@@ -282,6 +301,21 @@ export async function rapportVentes(
           caComptant: { $sum: { $cond: [{ $eq: ["$typeVente", "comptant"] }, "$montantTotal", 0] } },
         },
       },
+    ]),
+    // Encaissements par mode de paiement sur la période (ventes +
+    // remboursements de créances ; hors paiements annulés)
+    Paiement.aggregate([
+      {
+        $match: {
+          entrepriseId: eid,
+          kiosqueId: { $in: ids },
+          statut: "valide",
+          type: { $ne: "annulation_vente" },
+          datePaiement: plage(f.du, f.au),
+        },
+      },
+      { $group: { _id: "$mode", montant: { $sum: "$montant" }, nb: { $sum: 1 } } },
+      { $sort: { montant: -1 } },
     ]),
   ]);
 
@@ -347,6 +381,7 @@ export async function rapportVentes(
       quantite: p.quantite,
       montant: p.montant,
     })),
+    parMode: parMode.map((m) => ({ mode: m._id || "Autre", montant: m.montant, nb: m.nb })),
     totaux: {
       ca: t.ca,
       encaisse: t.encaisse,
@@ -618,6 +653,9 @@ export async function exporterRapport(
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
       r.topProduits.map((p) => ({ Code: p.code, Produit: p.designation, Quantité: p.quantite, Montant: p.montant }))
     ), "Top produits");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+      r.parMode.map((m) => ({ Mode: m.mode, Montant: m.montant, "Nb encaissements": m.nb }))
+    ), "Par mode de paiement");
     return { buffer: XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer, nom: `rapport-ventes-${date}.xlsx` };
   }
 
