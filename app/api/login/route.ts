@@ -1,0 +1,190 @@
+import { NextResponse, NextRequest } from "next/server";
+import { verifyPassword } from "@/utils/auth";
+import { signToken, setAuthCookie } from "@/lib/auth";
+import { db } from "@/db/mongoConnect";
+import { User } from "@/models/users.model";
+import { JournalConnexion } from "@/models/journalConnexion";
+import { getUserPermissions } from "@/lib/permissions";
+
+const MAX_ATTEMPTS = 4;
+const LOCK_DURATION_MINUTES = 30;
+
+// Limite simple par IP : 30 tentatives / minute (complète le verrouillage
+// par compte, qui seul resterait contournable en visant plusieurs comptes)
+const tentativesParIp = new Map<string, { count: number; reset: number }>();
+const IP_LIMITE = 30;
+const IP_FENETRE_MS = 60_000;
+
+function ipBloquee(ip: string): boolean {
+  const now = Date.now();
+  const e = tentativesParIp.get(ip);
+  if (!e || e.reset < now) {
+    tentativesParIp.set(ip, { count: 1, reset: now + IP_FENETRE_MS });
+    if (tentativesParIp.size > 10_000) tentativesParIp.clear();
+    return false;
+  }
+  e.count++;
+  return e.count > IP_LIMITE;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const clientIp =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      "unknown";
+    if (ipBloquee(clientIp)) {
+      return NextResponse.json(
+        { message: "Trop de tentatives. Réessayez dans une minute." },
+        { status: 429 }
+      );
+    }
+
+    await db();
+    const body = await req.json();
+    const email = typeof body?.email === "string" ? body.email : "";
+    const password = typeof body?.password === "string" ? body.password : "";
+
+    if (!email || !password || email.length > 200 || password.length > 500) {
+      return NextResponse.json(
+        { message: "Identifiant et mot de passe requis" },
+        { status: 400 }
+      );
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+
+    const userAgent = req.headers.get("user-agent") || "unknown";
+
+    const logConnexion = async (
+      statut: "success" | "failure" | "locked",
+      message?: string
+    ) => {
+      await JournalConnexion.create({
+        entrepriseId: user?.entrepriseId || null,
+        userId: user ? user._id : undefined,
+        email: email.toLowerCase().trim(),
+        ip: clientIp,
+        userAgent,
+        statut,
+        message,
+      });
+    };
+
+    if (!user) {
+      await logConnexion("failure", "Utilisateur introuvable");
+      return NextResponse.json(
+        { message: "Identifiant ou mot de passe incorrect" },
+        { status: 401 }
+      );
+    }
+
+    // Compte bloqué par l'administrateur
+    if (user.comptebloque) {
+      await logConnexion("locked", "Compte bloqué par l'administrateur");
+      return NextResponse.json(
+        { message: "Compte bloqué. Contactez l'administrateur." },
+        { status: 423 }
+      );
+    }
+
+    // Vérifier si le compte est verrouillé temporairement
+    if (user.isLocked && user.lockedUntil && user.lockedUntil > new Date()) {
+      await logConnexion("locked", "Compte temporairement verrouillé");
+      return NextResponse.json(
+        { message: "Compte bloqué. Contactez l'administrateur." },
+        { status: 423 }
+      );
+    }
+
+    // Déverrouillage automatique si la durée est passée
+    if (user.isLocked && user.lockedUntil && user.lockedUntil <= new Date()) {
+      user.isLocked = false;
+      user.failedAttempts = 0;
+      user.remainingAttempts = MAX_ATTEMPTS;
+    }
+
+    const valid = await verifyPassword(password, user.password || "");
+
+    if (!valid) {
+      user.failedAttempts = (user.failedAttempts || 0) + 1;
+      user.remainingAttempts = Math.max(0, MAX_ATTEMPTS - user.failedAttempts);
+
+      if (user.failedAttempts >= MAX_ATTEMPTS) {
+        user.isLocked = true;
+        user.lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000);
+        await user.save();
+        await logConnexion("locked", "Trop de tentatives échouées");
+        return NextResponse.json(
+          { message: "Compte bloqué. Contactez l'administrateur." },
+          { status: 423 }
+        );
+      }
+
+      await user.save();
+      await logConnexion("failure", "Mot de passe incorrect");
+      return NextResponse.json(
+        {
+          message: "Identifiant ou mot de passe incorrect",
+          remainingAttempts: user.remainingAttempts,
+        },
+        { status: 401 }
+      );
+    }
+
+    // Entreprise suspendue → connexion refusée (sauf super-admin plateforme)
+    if (user.type !== "adminsuper" && user.entrepriseId) {
+      const { Entreprise } = await import("@/models/entreprise");
+      const ent = await Entreprise.findById(user.entrepriseId).select("statut").lean();
+      if (!ent || ent.statut === "suspendu") {
+        await logConnexion("locked", "Entreprise suspendue");
+        return NextResponse.json(
+          {
+            message: "Compte entreprise suspendu. Contactez la plateforme EASY-KIOSQUE.",
+            code: "ENTREPRISE_SUSPENDUE",
+          },
+          { status: 402 }
+        );
+      }
+    }
+
+    // Connexion réussie : réinitialiser les compteurs
+    user.failedAttempts = 0;
+    user.remainingAttempts = MAX_ATTEMPTS;
+    user.isLocked = false;
+    user.lockedUntil = undefined;
+    await user.save();
+
+    const token = signToken({
+      userId: user._id.toString(),
+      email: user.email,
+      type: user.type || "caissier",
+      entrepriseId: user.entrepriseId ? user.entrepriseId.toString() : null,
+      tv: user.tokenVersion || 0,
+    });
+
+    const response = NextResponse.json({
+      message: "Connexion réussie",
+      user: {
+        _id: user._id.toString(),
+        nom: user.nom,
+        prenom: user.prenom,
+        email: user.email,
+        type: user.type,
+        entrepriseId: user.entrepriseId ? user.entrepriseId.toString() : null,
+        kiosqueIds: (user.kiosqueIds || []).map((k: any) => k.toString()),
+        permissions: getUserPermissions(user),
+      },
+    });
+
+    await setAuthCookie(response, token);
+    await logConnexion("success");
+    return response;
+  } catch (error: any) {
+    console.error("Erreur login:", error);
+    return NextResponse.json(
+      { message: "Erreur serveur" },
+      { status: 500 }
+    );
+  }
+}

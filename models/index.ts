@@ -1,0 +1,23 @@
+// Enregistrement central de tous les modèles Mongoose EASY-KIOSQUE
+export { User } from "./users.model";
+export { Profil } from "./profil";
+export { Entreprise } from "./entreprise";
+export { Kiosque } from "./kiosque";
+export { Sequence } from "./sequence";
+export { JournalConnexion } from "./journalConnexion";
+export { JournalActivite } from "./journalActivite";
+export { Categorie } from "./categorie";
+export { Produit } from "./produit";
+export { Client } from "./client";
+export { Vente } from "./vente";
+export { LigneVente } from "./ligneVente";
+export { Paiement } from "./paiement";
+export { Creance } from "./creance";
+export { Notification } from "./notification";
+export { MouvementCaisse } from "./mouvementCaisse";
+export { Remboursement } from "./remboursement";
+export { SessionCaisse } from "./sessionCaisse";
+export { Remise } from "./remise";
+export { CategorieDepense } from "./categorieDepense";
+export { Depense } from "./depense";
+export { TokenReset } from "./tokenReset";

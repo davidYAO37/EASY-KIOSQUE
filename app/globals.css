@@ -1,0 +1,510 @@
+:root {
+  /* Charte EASY-KIOSQUE : orange / anthracite */
+  --ek-green: #ea580c;
+  --ek-green-dark: #c2410c;
+  --ek-green-light: #ffedd5;
+  --ek-green-soft: var(--ek-green-light);
+  --ek-grey: #9d9fa2;
+  --ek-text: #3c4043;
+  --ek-muted: #6b6e72;
+  --ek-anthracite: #2b2d31;
+  --ek-anthracite-2: #3a3d42;
+  --ek-bg: #f4f6f5;
+  --ek-border: #e3e5e8;
+  --ek-orange: #fd7e14;
+  --ek-red: #dc3545;
+
+  /* Surcharge Bootstrap 5 */
+  --bs-primary: var(--ek-green);
+  --bs-primary-rgb: 234, 88, 12;
+  --bs-link-color: var(--ek-green);
+  --bs-link-color-rgb: 234, 88, 12;
+  --bs-link-hover-color: var(--ek-green-dark);
+  --bs-link-hover-color-rgb: 194, 65, 12;
+  --bs-border-color: var(--ek-border);
+  --bs-focus-ring-color: rgba(234, 88, 12, 0.25);
+}
+
+body {
+  background-color: var(--ek-bg);
+  color: var(--ek-text);
+  font-family: "Segoe UI", Inter, system-ui, -apple-system, Roboto, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--ek-text);
+  font-weight: 600;
+}
+
+/* ---------- Boutons / liens : orange EASY-KIOSQUE ---------- */
+.btn-primary {
+  --bs-btn-bg: var(--ek-green);
+  --bs-btn-border-color: var(--ek-green);
+  --bs-btn-hover-bg: var(--ek-green-dark);
+  --bs-btn-hover-border-color: var(--ek-green-dark);
+  --bs-btn-active-bg: var(--ek-green-dark);
+  --bs-btn-active-border-color: var(--ek-green-dark);
+  --bs-btn-disabled-bg: var(--ek-green);
+  --bs-btn-disabled-border-color: var(--ek-green);
+  --bs-btn-focus-shadow-rgb: 234, 88, 12;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--ek-green);
+  --bs-btn-border-color: var(--ek-green);
+  --bs-btn-hover-bg: var(--ek-green);
+  --bs-btn-hover-border-color: var(--ek-green);
+  --bs-btn-active-bg: var(--ek-green-dark);
+  --bs-btn-active-border-color: var(--ek-green-dark);
+  --bs-btn-focus-shadow-rgb: 234, 88, 12;
+}
+
+.bg-primary { background-color: var(--ek-green) !important; }
+.text-primary { color: var(--ek-green) !important; }
+.border-primary { border-color: var(--ek-green) !important; }
+.badge.text-bg-primary, .badge.bg-primary { background-color: var(--ek-green) !important; }
+
+.alert-primary {
+  --bs-alert-color: var(--ek-green-dark);
+  --bs-alert-bg: var(--ek-green-soft);
+  --bs-alert-border-color: var(--ek-green);
+}
+
+.table-primary {
+  --bs-table-bg: var(--ek-green-soft);
+  --bs-table-border-color: var(--ek-border);
+}
+
+.btn-success {
+  --bs-btn-bg: var(--ek-green);
+  --bs-btn-border-color: var(--ek-green);
+  --bs-btn-hover-bg: var(--ek-green-dark);
+  --bs-btn-hover-border-color: var(--ek-green-dark);
+  --bs-btn-active-bg: var(--ek-green-dark);
+  --bs-btn-active-border-color: var(--ek-green-dark);
+  --bs-btn-disabled-bg: var(--ek-green);
+  --bs-btn-disabled-border-color: var(--ek-green);
+  --bs-btn-focus-shadow-rgb: 234, 88, 12;
+}
+
+.btn-outline-success {
+  --bs-btn-color: var(--ek-green);
+  --bs-btn-border-color: var(--ek-green);
+  --bs-btn-hover-bg: var(--ek-green);
+  --bs-btn-hover-border-color: var(--ek-green);
+  --bs-btn-active-bg: var(--ek-green-dark);
+  --bs-btn-active-border-color: var(--ek-green-dark);
+  --bs-btn-focus-shadow-rgb: 234, 88, 12;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--ek-green);
+  box-shadow: 0 0 0 0.25rem rgba(234, 88, 12, 0.15);
+}
+
+.form-check-input:checked {
+  background-color: var(--ek-green);
+  border-color: var(--ek-green);
+}
+
+.spinner-border.text-primary, .spinner-border { color: var(--ek-green); }
+
+/* ---------- Page de connexion / inscription ---------- */
+.login-background {
+  background:
+    radial-gradient(1200px 500px at 85% -10%, rgba(234, 88, 12, 0.40) 0%, transparent 60%),
+    linear-gradient(135deg, var(--ek-anthracite) 0%, var(--ek-anthracite-2) 100%);
+}
+
+.login-card {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.login-logo-tile {
+  background: #fff;
+  border-radius: 12px;
+  padding: 0.9rem 1.4rem;
+  display: inline-block;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* Logo texte EASY-KIOSQUE */
+.ek-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ek-green);
+  line-height: 1;
+}
+
+.ek-logo .ek-logo-badge {
+  background: linear-gradient(135deg, var(--ek-green) 0%, var(--ek-green-dark) 100%);
+  color: #fff;
+  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+}
+
+.ek-logo .ek-logo-text {
+  font-size: 1.1rem;
+  color: var(--ek-anthracite);
+}
+
+.ek-logo .ek-logo-text strong {
+  color: var(--ek-green);
+}
+
+/* ---------- Menu latéral anthracite ---------- */
+.sidebar-ek {
+  background-color: var(--ek-anthracite);
+  color: #d6d8db;
+}
+
+.sidebar-ek .nav-link {
+  color: #c9ccd1;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-ek .nav-link:hover {
+  background-color: var(--ek-anthracite-2);
+  color: #fff;
+}
+
+.sidebar-ek .nav-link.active {
+  background-color: var(--ek-anthracite-2);
+  border-left-color: var(--ek-green);
+  color: #fff;
+}
+
+.sidebar-ek .nav-link.active .bi {
+  color: var(--ek-green);
+}
+
+.sidebar-ek .sidebar-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ek-grey);
+  margin: 1rem 0 0.25rem 0.75rem;
+}
+
+.sidebar-ek .sidebar-logo-tile {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topbar-ek {
+  background-color: var(--ek-anthracite);
+  color: #e9eaec;
+}
+
+.offcanvas.sidebar-ek {
+  width: 280px !important;
+}
+
+/* ---------- Header (barre supérieure du contenu) ---------- */
+.header-ek {
+  background: #fff;
+  border-bottom: 1px solid var(--ek-border);
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+}
+
+.header-ek .kiosque-select {
+  max-width: 260px;
+}
+
+/* ---------- Cartes / tableaux ---------- */
+.card {
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+h3.titre-page {
+  position: relative;
+  color: var(--ek-anthracite);
+  padding-bottom: 0.5rem;
+}
+
+h3.titre-page::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ek-green);
+}
+
+.carte-stat {
+  border-left: 4px solid var(--ek-green);
+}
+
+.carte-stat .stat-icone {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  background: var(--ek-green-light);
+  color: var(--ek-green-dark);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Les <form> englobant Modal.Body + Modal.Footer s'intercalent dans le flex de
+   .modal-content : sans ceci, .modal-body ne peut pas rétrécir (pas de scroll)
+   et le footer est tronqué hors écran. Le form devient flex pour que le body défile. */
+.modal-dialog-scrollable .modal-content > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ================================================================
+   Pages publiques modernes — landing + auth (kiosque)
+   ================================================================ */
+
+/* ---------- Coquille d'authentification ---------- */
+.auth-shell {
+  display: flex;
+  min-height: 100vh;
+  margin: -1rem;
+}
+
+.auth-side {
+  display: none;
+  position: relative;
+  width: 46%;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, #c2410c 0%, #ea580c 55%, #9a3412 100%);
+  color: #fff;
+  padding: 3rem 3rem 2rem;
+  flex-direction: column;
+  justify-content: space-between;
+}
+@media (min-width: 992px) {
+  .auth-side { display: flex; }
+}
+
+/* halos décoratifs */
+.auth-side::before,
+.auth-side::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+.auth-side::before {
+  width: 420px; height: 420px;
+  background: #fdba74;
+  top: -120px; right: -140px;
+}
+.auth-side::after {
+  width: 360px; height: 360px;
+  background: #f59e0b;
+  bottom: -140px; left: -120px;
+  opacity: 0.22;
+}
+
+.auth-side-content { position: relative; z-index: 1; }
+.auth-side h1 { font-size: 1.9rem; font-weight: 800; line-height: 1.25; }
+.auth-side .lead { opacity: 0.85; font-size: 1rem; }
+.auth-side img.illustration {
+  width: 100%;
+  max-width: 460px;
+  margin: 1.5rem auto;
+  display: block;
+  filter: drop-shadow(0 18px 30px rgba(0,0,0,.25));
+  animation: ek-float 6s ease-in-out infinite;
+}
+@keyframes ek-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.auth-points { list-style: none; padding: 0; margin: 0; }
+.auth-points li {
+  display: flex; align-items: center; gap: .65rem;
+  margin-bottom: .7rem; font-size: .95rem; opacity: .95;
+}
+.auth-points .bi { color: #fed7aa; font-size: 1.1rem; }
+
+.auth-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  position: relative;
+  background:
+    radial-gradient(900px 420px at 100% 0%, rgba(234,88,12,.10) 0%, transparent 55%),
+    radial-gradient(700px 380px at 0% 100%, rgba(253,126,20,.07) 0%, transparent 55%),
+    var(--ek-bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 460px;
+  background: #fff;
+  border: 1px solid var(--ek-border);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px -20px rgba(154, 52, 18, 0.25);
+  padding: 2rem 1.8rem;
+}
+.auth-card.wide { max-width: 640px; }
+
+/* ---------- Landing moderne ---------- */
+.lp-nav {
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(14px);
+  background: rgba(154, 52, 18, 0.85);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.lp-hero {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(135deg, #9a3412 0%, #ea580c 60%, #c2410c 100%);
+}
+.lp-hero::before {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(700px 340px at 88% 12%, rgba(251,191,36,.22) 0%, transparent 60%),
+    radial-gradient(600px 300px at 8% 90%, rgba(251,146,60,.28) 0%, transparent 55%);
+  pointer-events: none;
+}
+/* motif grille subtil */
+.lp-hero::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+  background-size: 26px 26px;
+  pointer-events: none;
+}
+.lp-hero .container { position: relative; z-index: 1; }
+.lp-badge {
+  display: inline-flex; align-items: center; gap: .45rem;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 999px;
+  padding: .35rem .9rem;
+  font-size: .8rem;
+  backdrop-filter: blur(6px);
+}
+.lp-chip {
+  position: absolute;
+  background: rgba(255,255,255,.95);
+  color: var(--ek-anthracite);
+  border-radius: 12px;
+  padding: .55rem .9rem;
+  font-size: .82rem;
+  font-weight: 600;
+  box-shadow: 0 14px 30px rgba(0,0,0,.22);
+  animation: ek-float 5s ease-in-out infinite;
+  white-space: nowrap;
+}
+.lp-chip .bi { color: var(--ek-green); margin-right: .35rem; }
+.lp-chip-1 { top: 8%; right: 6%; animation-delay: .6s; }
+.lp-chip-2 { bottom: 12%; left: 2%; animation-delay: 1.4s; }
+.lp-chip-3 { bottom: 30%; right: 2%; animation-delay: 2.2s; }
+@media (max-width: 991.98px) { .lp-chip { display: none; } }
+
+.lp-feature {
+  height: 100%;
+  border: 1px solid var(--ek-border);
+  border-radius: 16px;
+  background: #fff;
+  padding: 1.6rem;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.lp-feature:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 40px -14px rgba(154,52,18,.20);
+}
+.lp-feature .ico {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+  background: var(--ek-green-light);
+  color: var(--ek-green-dark);
+  margin-bottom: 1rem;
+}
+
+.lp-step {
+  display: flex; gap: 1rem; align-items: flex-start;
+}
+.lp-step .num {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ek-green);
+  color: #fff; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.lp-price {
+  height: 100%;
+  border-radius: 18px;
+  border: 1px solid var(--ek-border);
+  background: #fff;
+  padding: 1.8rem;
+  position: relative;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.lp-price:hover { transform: translateY(-4px); box-shadow: 0 16px 36px -14px rgba(154,52,18,.2); }
+.lp-price.vedette {
+  border: 2px solid var(--ek-green);
+  box-shadow: 0 20px 45px -14px rgba(234,88,12,.3);
+}
+
+.lp-cta {
+  background: linear-gradient(120deg, #9a3412, #ea580c);
+  border-radius: 22px;
+  color: #fff;
+  position: relative; overflow: hidden;
+}
+.lp-cta::before {
+  content: "";
+  position: absolute; width: 300px; height: 300px; border-radius: 50%;
+  background: rgba(251,191,36,.18); filter: blur(60px);
+  right: -80px; top: -80px;
+}
+
+/* ---------- Page d'accueil ---------- */
+.ek-home .navbar .nav-link { color: #14213d; }
+.ek-home .navbar .nav-link:hover { color: var(--ek-green); }
+.ek-home .navbar .ek-nav-actif { color: var(--ek-green); box-shadow: inset 0 -2px 0 var(--ek-green); }
+.ek-home section[id] { scroll-margin-top: 80px; }
+@media (min-width: 768px) {
+  .ek-home .border-start-md { border-left: 1px solid var(--ek-border); }
+}
+.ek-home h1, .ek-home h2, .ek-home h5, .ek-home h6 { color: #14213d; }
+.ek-home #contact h2 { color: #fff; }

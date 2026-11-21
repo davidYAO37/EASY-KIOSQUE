@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- corps du kiosque -->
+  <rect x="10" y="26" width="44" height="32" rx="4" fill="#14213d"/>
+  <!-- auvent rayé orange / blanc -->
+  <path d="M8 24 L14 8 H50 L56 24 Z" fill="#ea580c"/>
+  <path d="M19 8 H25 L23.5 24 H16 Z M33.5 8 H39.5 L41 24 H33.5 Z" fill="#fed7aa"/>
+  <path d="M8 24h12v2.5a6 6 0 0 1-12 0z" fill="#ea580c"/>
+  <path d="M20 24h12v2.5a6 6 0 0 1-12 0z" fill="#fed7aa"/>
+  <path d="M32 24h12v2.5a6 6 0 0 1-12 0z" fill="#ea580c"/>
+  <path d="M44 24h12v2.5a6 6 0 0 1-12 0z" fill="#fed7aa"/>
+  <!-- fourchette -->
+  <path d="M24 36v6a3 3 0 0 0 2 2.8V54h2.4V44.8a3 3 0 0 0 2-2.8v-6h-1.6v5h-1v-5h-1.6v5h-1v-5z" fill="#ffffff"/>
+  <!-- cuillère -->
+  <ellipse cx="38.5" cy="40" rx="3.6" ry="4.8" fill="#ffffff"/>
+  <rect x="37.3" y="43.5" width="2.4" height="10.5" rx="1.2" fill="#ffffff"/>
+</svg>

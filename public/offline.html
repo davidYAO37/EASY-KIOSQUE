@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hors-ligne — EASY-KIOSQUE</title>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f4f6f9; }
+    .card { background: #fff; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,.08); max-width: 420px; }
+    .icone { font-size: 48px; }
+    h1 { font-size: 20px; color: #14213d; }
+    p { color: #6c757d; font-size: 14px; line-height: 1.6; }
+    button { background: #ea580c; color: #fff; border: 0; border-radius: 6px; padding: 10px 24px; font-size: 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icone">📡</div>
+    <h1>Vous êtes hors-ligne</h1>
+    <p>
+      Cette page n'est pas disponible sans connexion.<br/>
+      Si vous étiez sur la caisse, vos ventes saisies sont conservées
+      localement et seront synchronisées au retour du réseau.
+    </p>
+    <button onclick="location.reload()">Réessayer</button>
+  </div>
+</body>
+</html>
