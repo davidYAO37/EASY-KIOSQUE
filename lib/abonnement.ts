@@ -15,7 +15,7 @@ import { Types } from "mongoose";
  */
 
 export const GRACE_JOURS = 5;
-export const ESSAI_JOURS = 30;
+export const ESSAI_JOURS = 30; // repli si le plan ESSAI est absent
 export const PLAN_ESSAI = "ESSAI";
 
 export interface EtatAbonnement {
@@ -29,16 +29,31 @@ export interface EtatAbonnement {
 }
 
 /**
+ * Durée d'essai en jours — lue depuis le plan ESSAI saisi par le
+ * super-admin en base ; repli sur ESSAI_JOURS si le plan est absent.
+ * 0 = aucun essai (expiration immédiate, grâce conservée).
+ */
+export async function dureeEssaiJours(): Promise<number> {
+  const plan = await Plan.findOne({ code: PLAN_ESSAI })
+    .select("dureeEssaiJours")
+    .lean();
+  return plan?.dureeEssaiJours ?? ESSAI_JOURS;
+}
+
+/**
  * Calcule l'état d'abonnement d'une entreprise. Si l'entreprise n'a
- * jamais eu d'abonnement, un essai de 30 jours lui est provisionné
- * (lazy) — `ent` doit être un document Mongoose modifiable.
+ * jamais eu d'abonnement, un essai lui est provisionné (lazy) selon
+ * la durée du plan ESSAI — `ent` doit être un document Mongoose
+ * modifiable.
  */
 export async function etatAbonnement(ent: IEntreprise): Promise<EtatAbonnement> {
   const maintenant = new Date();
 
   if (!ent.abonnementPlan || !ent.abonnementExpireLe) {
     ent.abonnementPlan = PLAN_ESSAI;
-    ent.abonnementExpireLe = new Date(maintenant.getTime() + ESSAI_JOURS * 86400_000);
+    ent.abonnementExpireLe = new Date(
+      maintenant.getTime() + (await dureeEssaiJours()) * 86400_000
+    );
     await ent.save();
   }
 

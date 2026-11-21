@@ -48,6 +48,7 @@ interface Plan {
   maxUtilisateurs: number;
   description?: string;
   statut: string;
+  vedette?: boolean;
 }
 
 interface Detail extends EntrepriseRow {
@@ -92,7 +93,7 @@ function AdminEntreprisesInner() {
   // Plans
   const [showPlans, setShowPlans] = useState(false);
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
-  const [planForm, setPlanForm] = useState({ nom: '', prixMensuel: 0, maxKiosques: 0, maxUtilisateurs: 0, dureeEssaiJours: 0, description: '', statut: 'actif', code: '' });
+  const [planForm, setPlanForm] = useState({ nom: '', prixMensuel: 0, maxKiosques: 0, maxUtilisateurs: 0, dureeEssaiJours: 0, description: '', statut: 'actif', code: '', vedette: false });
 
   const charger = useCallback(() => {
     setChargement(true);
@@ -189,10 +190,10 @@ function AdminEntreprisesInner() {
   const ouvrirEditionPlan = (p?: Plan) => {
     if (p) {
       setEditPlan(p);
-      setPlanForm({ nom: p.nom, prixMensuel: p.prixMensuel, maxKiosques: p.maxKiosques, maxUtilisateurs: p.maxUtilisateurs, dureeEssaiJours: p.dureeEssaiJours || 0, description: p.description || '', statut: p.statut, code: p.code });
+      setPlanForm({ nom: p.nom, prixMensuel: p.prixMensuel, maxKiosques: p.maxKiosques, maxUtilisateurs: p.maxUtilisateurs, dureeEssaiJours: p.dureeEssaiJours || 0, description: p.description || '', statut: p.statut, code: p.code, vedette: Boolean(p.vedette) });
     } else {
       setEditPlan({ _id: '', code: '', nom: '', prixMensuel: 0, maxKiosques: 1, maxUtilisateurs: 3, statut: 'actif' });
-      setPlanForm({ nom: '', prixMensuel: 0, maxKiosques: 1, maxUtilisateurs: 3, dureeEssaiJours: 0, description: '', statut: 'actif', code: '' });
+      setPlanForm({ nom: '', prixMensuel: 0, maxKiosques: 1, maxUtilisateurs: 3, dureeEssaiJours: 0, description: '', statut: 'actif', code: '', vedette: false });
     }
   };
 
@@ -468,6 +469,11 @@ function AdminEntreprisesInner() {
                     <Form.Select size="sm" value={planForm.statut} onChange={(e) => setPlanForm({ ...planForm, statut: e.target.value })}>
                       <option value="actif">Actif</option><option value="inactif">Inactif</option>
                     </Form.Select></Col>
+                  <Col md={4} className="d-flex align-items-end pb-1">
+                    <Form.Check type="checkbox" id="plan-vedette" label="Mis en avant sur l'accueil"
+                      checked={Boolean(planForm.vedette)}
+                      onChange={(e) => setPlanForm({ ...planForm, vedette: e.target.checked })} />
+                  </Col>
                 </Row>
                 <div className="mt-3 d-flex gap-2">
                   <Button size="sm" variant="primary" onClick={sauverPlan}>Enregistrer</Button>

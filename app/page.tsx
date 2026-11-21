@@ -1,5 +1,5 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -37,11 +37,52 @@ const FONCTIONNALITES = [
   { icon: 'bi-wifi-off', titre: 'Mode hors-ligne', texte: 'Coupure réseau ? La caisse continue. Les ventes se synchronisent au retour de la connexion.' },
 ];
 
-const TARIFS = [
-  { nom: 'Essai', prix: '0 FCFA', periode: '30 jours', details: ['1 kiosque', '3 utilisateurs', 'Catalogue complet', 'Ventes, caisse, crédits'], vedette: false },
-  { nom: 'Kiosque', prix: '10 000 FCFA', periode: '/ mois', details: ['Jusqu’à 3 kiosques', '10 utilisateurs', 'Tous les modules', 'Rapports & exports Excel'], vedette: true },
-  { nom: 'Entreprise', prix: '25 000 FCFA', periode: '/ mois', details: ['Kiosques illimités', 'Utilisateurs illimités', 'Support prioritaire', 'Journal d’audit complet'], vedette: false },
+// Repli si l'API des plans est injoignable — la vraie source est
+// /api/plans (saisie super-admin).
+const TARIFS_DEFAUT = [
+  { nom: 'Essai gratuit', prix: '0 FCFA', periode: '· 15 j', details: ['1 kiosque', '1 utilisateur', 'Tous les modules'], vedette: false, aPartirDe: false },
+  { nom: 'Kiosque', prix: '25 000 FCFA', periode: '/ mois', details: ['Jusqu’à 3 kiosques', '10 utilisateurs', 'Rapports & exports'], vedette: true, aPartirDe: true },
+  { nom: 'Entreprise', prix: '50 000 FCFA', periode: '/ mois', details: ['Kiosques illimités', 'Utilisateurs illimités', 'Support prioritaire'], vedette: false, aPartirDe: true },
 ];
+
+interface PlanPublic {
+  code: string;
+  nom: string;
+  prixMensuel: number;
+  dureeEssaiJours?: number;
+  maxKiosques: number;
+  maxUtilisateurs: number;
+  description?: string;
+  vedette?: boolean;
+}
+
+interface Tarif {
+  nom: string;
+  prix: string;
+  periode: string;
+  details: string[];
+  vedette: boolean;
+  aPartirDe: boolean;
+}
+
+function planVersTarif(p: PlanPublic): Tarif {
+  // Les puces = description saisie par le super-admin (séparée par , ; ou retour
+  // à la ligne) ; sinon les limites kiosques/utilisateurs du plan.
+  const puces = (p.description || '').split(/[,;\n]+/).map((d) => d.trim()).filter(Boolean);
+  const details = puces.length > 0 ? puces : [
+    p.maxKiosques === 0 ? 'Kiosques illimités' : `Jusqu’à ${p.maxKiosques} kiosque${p.maxKiosques > 1 ? 's' : ''}`,
+    p.maxUtilisateurs === 0 ? 'Utilisateurs illimités' : `${p.maxUtilisateurs} utilisateur${p.maxUtilisateurs > 1 ? 's' : ''}`,
+  ];
+  const gratuit = p.prixMensuel === 0;
+  return {
+    nom: p.nom,
+    prix: `${p.prixMensuel.toLocaleString('fr-FR')} FCFA`,
+    periode: gratuit ? (p.dureeEssaiJours ? `· ${p.dureeEssaiJours} j` : 'gratuit') : '/ mois',
+    details,
+    vedette: Boolean(p.vedette),
+    aPartirDe: !gratuit,
+  };
+}
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
 const CONTACT_TEL = process.env.NEXT_PUBLIC_CONTACT_TEL;
@@ -61,6 +102,25 @@ function Pastille({ icon, taille = 44 }: { icon: string; taille?: number }) {
  */
 export default function Home() {
   const router = useRouter();
+  const [tarifs, setTarifs] = useState<Tarif[]>(TARIFS_DEFAUT);
+
+  // Tarifs synchronisés avec les plans saisis par le super-admin
+  useEffect(() => {
+    fetch('/api/plans')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data?.plans) && data.plans.length > 0) {
+          const liste = data.plans.map(planVersTarif);
+          // Aucun plan coché « vedette » : on met en avant le premier plan payant
+          if (!liste.some((t: Tarif) => t.vedette)) {
+            const payant = liste.find((t: Tarif) => t.prix !== '0 FCFA');
+            if (payant) payant.vedette = true;
+          }
+          setTarifs(liste);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Un utilisateur déjà connecté est redirigé vers son espace
   useEffect(() => {
@@ -214,21 +274,38 @@ export default function Home() {
         <div className="container">
           <h2 className="text-center fw-bold mb-1">Tarifs simples et transparents</h2>
           <p className="text-center text-muted mb-5">Commencez gratuitement, évoluez quand vous grandissez.</p>
-          <div className="row g-4 justify-content-center">
-            {TARIFS.map((t) => (
+          <div className="row g-4 justify-content-center pt-3">
+            {tarifs.map((t) => (
               <div key={t.nom} className="col-md-4 col-lg-3">
-                <div className={`card h-100 rounded-4 ${t.vedette ? 'border-primary border-2 shadow' : 'shadow-sm'}`}>
-                  <div className="card-body p-4 text-center d-flex flex-column">
-                    {t.vedette && <span className="badge bg-primary mb-2 align-self-center">POPULAIRE</span>}
-                    <h5 className="fw-bold">{t.nom}</h5>
-                    <div className="my-3">
-                      <span className="fs-3 fw-bold" style={{ color: ORANGE }}>{t.prix}</span>
-                      <span className="text-muted small"> {t.periode}</span>
+                <div className={`card h-100 rounded-4 position-relative ${t.vedette ? 'border-primary border-2 shadow' : 'shadow-sm'}`}
+                  style={{ marginTop: 14 }}>
+                  {t.vedette && (
+                    <span className="badge bg-primary position-absolute top-0 start-50 translate-middle px-3 py-2 rounded-pill">
+                      Le plus populaire
+                    </span>
+                  )}
+                  <div className="card-body p-4 d-flex flex-column">
+                    <h5 className="fw-bold mt-2">{t.nom}</h5>
+                    <div className="d-flex align-items-center justify-content-center gap-2 rounded-3 px-3 py-2 my-3 fw-bold"
+                      style={{ border: '2px dashed rgba(234,88,12,.4)', background: 'var(--ek-green-light)', color: 'var(--ek-green-dark)' }}>
+                      <i className="bi bi-gem" style={{ color: ORANGE }}></i>
+                      <span className="d-flex flex-column">
+                        <span className="fw-normal" style={{ fontSize: '0.65rem', letterSpacing: '0.06em', minHeight: '1rem' }}>
+                          {t.aPartirDe ? 'À PARTIR DE' : ' '}
+                        </span>
+                        <span>{t.prix} <span className="fw-normal small">{t.periode}</span></span>
+                      </span>
                     </div>
-                    <ul className="list-unstyled small text-muted text-start mx-auto flex-grow-1">
-                      {t.details.map((d) => <li key={d} className="mb-1"><i className="bi bi-check2 me-1" style={{ color: ORANGE }}></i>{d}</li>)}
+                    <ul className="list-unstyled small flex-grow-1 mb-0">
+                      {t.details.map((d) => (
+                        <li key={d} className="d-flex align-items-center gap-2 mb-2">
+                          <i className="bi bi-check-square-fill" style={{ color: ORANGE }}></i><span className="text-muted">{d}</span>
+                        </li>
+                      ))}
                     </ul>
-                    <Link href="/inscription" className={`btn mt-3 ${t.vedette ? 'btn-primary' : 'btn-outline-primary'}`}>Choisir</Link>
+                    <Link href="/inscription" className={`btn mt-3 ${t.vedette ? 'btn-primary' : 'btn-outline-primary'}`}>
+                      Choisir <i className="bi bi-arrow-right ms-1"></i>
+                    </Link>
                   </div>
                 </div>
               </div>

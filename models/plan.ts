@@ -14,6 +14,8 @@ export interface IPlan extends Document {
   maxUtilisateurs: number;
   description?: string;
   statut: "actif" | "inactif";
+  /** Mis en avant sur la page d'accueil (badge « populaire »). */
+  vedette?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -28,6 +30,7 @@ const PlanSchema = new Schema<IPlan>(
     maxUtilisateurs: { type: Number, default: 3 },
     description: { type: String },
     statut: { type: String, enum: ["actif", "inactif"], default: "actif" },
+    vedette: { type: Boolean, default: false },
   },
   { timestamps: true, collection: "plans" }
 );

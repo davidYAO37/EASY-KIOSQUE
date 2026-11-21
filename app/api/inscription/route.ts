@@ -11,6 +11,7 @@ import { CategorieDepense } from "@/models/categorieDepense";
 import { Produit } from "@/models/produit";
 import { Sequence } from "@/models/sequence";
 import { inscriptionSchema } from "@/lib/validations";
+import { dureeEssaiJours } from "@/lib/abonnement";
 
 const PROFILS_DEFAUT = [
   { profil: "Administrateur", type: "admin" },
@@ -126,6 +127,8 @@ export async function POST(req: NextRequest) {
     }
 
     let entrepriseId: mongoose.Types.ObjectId | null = null;
+    // Durée d'essai = celle du plan ESSAI saisi par le super-admin
+    const joursEssai = await dureeEssaiJours();
     await avecTransaction(async (session) => {
         const [ent] = await Entreprise.create(
           [
@@ -138,9 +141,10 @@ export async function POST(req: NextRequest) {
               ville: e.ville || undefined,
               devise: "FCFA",
               statut: "actif",
-              // Essai gratuit de 30 jours pour toute nouvelle entreprise
+              // Essai gratuit pour toute nouvelle entreprise — durée
+              // du plan ESSAI configurée par le super-admin
               abonnementPlan: "ESSAI",
-              abonnementExpireLe: new Date(Date.now() + 30 * 86400_000),
+              abonnementExpireLe: new Date(Date.now() + joursEssai * 86400_000),
             },
           ],
           { session }

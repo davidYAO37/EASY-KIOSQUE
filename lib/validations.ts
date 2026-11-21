@@ -318,6 +318,7 @@ export const planSchema = z
     maxUtilisateurs: z.number().int().min(0).max(10000),
     description: z.string().trim().max(300).optional().or(z.literal("")),
     statut: z.enum(["actif", "inactif"]).optional(),
+    vedette: z.boolean().optional(),
   })
   .strict();
 
