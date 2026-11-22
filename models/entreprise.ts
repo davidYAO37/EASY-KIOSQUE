@@ -32,6 +32,9 @@ export interface IEntreprise extends Document {
     impressionAuto?: boolean;
   };
 
+  /** Délai (en heures) pour demander l'annulation d'une vente. 0 = pas de limite. */
+  delaiDemandeAnnulationH?: number;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -57,6 +60,9 @@ const EntrepriseSchema = new Schema<IEntreprise>(
       format: { type: String, enum: ["thermique80", "a4"], default: "thermique80" },
       impressionAuto: { type: Boolean, default: false },
     },
+
+    // Fenêtre de demande d'annulation d'une vente (heures) — 0 = sans limite.
+    delaiDemandeAnnulationH: { type: Number, min: 0, max: 720, default: 24 },
   },
   { timestamps: true, collection: "entreprises" }
 );

@@ -6,6 +6,7 @@ import {
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { fmtMontant } from '@/lib/format';
@@ -24,6 +25,7 @@ const VIDE: FormClient = { nom: '', prenoms: '', telephone: '', adresse: '', pla
  */
 function ClientsInner() {
   const { user } = useAuthUser();
+  const lire = useLecture();
   const gestionnaire = ['admin', 'gestionnaire', 'comptable'].includes(user?.type || '');
 
   const [data, setData] = useState<{ clients: ClientDTO[]; total: number; page: number; pages: number }>({
@@ -50,12 +52,9 @@ function ClientsInner() {
     const params = new URLSearchParams({ page: String(page), limit: '20' });
     if (qRecherche) params.set('q', qRecherche);
     if (statut) params.set('statut', statut);
-    axios
-      .get(`/api/clients?${params}`, { withCredentials: true })
-      .then((res) => setData(res.data))
-      .catch(() => toast.error('Erreur de chargement des clients'))
-      .finally(() => setChargement(false));
-  }, [page, qRecherche, statut]);
+    void lire(`/api/clients?${params}`, setData,
+      () => toast.error('Erreur de chargement des clients'), () => setChargement(false));
+  }, [page, qRecherche, statut, lire]);
 
   useEffect(() => { charger(); }, [charger]);
 
@@ -147,7 +146,8 @@ function ClientsInner() {
 
       <Card>
         <div className="table-responsive">
-          <Table hover size="sm" className="mb-0 align-middle">
+          <Table hover size="sm" className="mb-0 align-middle" aria-busy={chargement}>
+            {chargement && <caption className="caption-top small">Actualisation…</caption>}
             <thead>
               <tr>
                 <th>Code</th><th>Nom</th><th>Téléphone</th><th>Adresse</th>
@@ -156,7 +156,7 @@ function ClientsInner() {
               </tr>
             </thead>
             <tbody>
-              {chargement ? (
+              {chargement && data.clients.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-4"><Spinner animation="border" size="sm" /></td></tr>
               ) : data.clients.length === 0 ? (
                 <tr><td colSpan={8} className="text-center text-muted py-4">Aucun client</td></tr>

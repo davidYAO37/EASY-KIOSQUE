@@ -7,7 +7,7 @@ import mongoose, { Schema, Document, Model, Types } from "mongoose";
 export interface INotification extends Document {
   entrepriseId: Types.ObjectId;
   kiosqueId?: Types.ObjectId | null;
-  type: "vente" | "annulation_vente" | "remboursement" | "caisse" | "depense" | "info";
+  type: "vente" | "annulation_vente" | "demande_annulation" | "remboursement" | "caisse" | "depense" | "info";
   titre: string;
   message: string;
   venteId?: Types.ObjectId | null;
@@ -25,7 +25,7 @@ const NotificationSchema = new Schema<INotification>(
     kiosqueId: { type: Schema.Types.ObjectId, ref: "Kiosque", default: null },
     type: {
       type: String,
-      enum: ["vente", "annulation_vente", "remboursement", "caisse", "depense", "info"],
+      enum: ["vente", "annulation_vente", "demande_annulation", "remboursement", "caisse", "depense", "info"],
       required: true,
     },
     titre: { type: String, required: true },

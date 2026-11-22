@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, Form, Modal, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import type { CategorieDTO } from '@/types/catalogue';
 
@@ -16,30 +18,18 @@ function CategoriesInner() {
   const [edition, setEdition] = useState<CategorieDTO | null>(null);
   const [form, setForm] = useState(VIDE);
   const [saving, setSaving] = useState(false);
-  const [peutGerer, setPeutGerer] = useState(false);
+  const { user, aAction } = useAuthUser();
+  const peutGerer = user?.type === 'admin' || user?.type === 'gestionnaire' || aAction('gerer_produits');
+  const lire = useLecture();
 
   const charger = useCallback(() => {
     setChargement(true);
-    axios
-      .get('/api/categories', { withCredentials: true })
-      .then((res) => setCategories(res.data?.categories || []))
-      .catch(() => toast.error('Erreur de chargement des catégories'))
-      .finally(() => setChargement(false));
-  }, []);
+    void lire('/api/categories', (data) => setCategories(data?.categories || []),
+      () => toast.error('Erreur de chargement des catégories'), () => setChargement(false));
+  }, [lire]);
 
   useEffect(() => {
     charger();
-    fetch('/api/me', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((d) => {
-        const u = d?.user;
-        setPeutGerer(
-          !!u && (u.type === 'admin' || u.type === 'gestionnaire' ||
-            u.permissions?.actions?.includes('*') ||
-            u.permissions?.actions?.includes('gerer_produits'))
-        );
-      })
-      .catch(() => {});
   }, [charger]);
 
   const ouvrir = (c?: CategorieDTO) => {
@@ -111,7 +101,8 @@ function CategoriesInner() {
 
       <Card>
         <Card.Body className="p-0">
-          <Table responsive hover className="mb-0 align-middle">
+          <Table responsive hover className="mb-0 align-middle" aria-busy={chargement}>
+            {chargement && <caption className="caption-top small">Actualisation…</caption>}
             <thead className="table-light">
               <tr>
                 <th>Code</th>
@@ -124,7 +115,7 @@ function CategoriesInner() {
               </tr>
             </thead>
             <tbody>
-              {chargement ? (
+              {chargement && categories.length === 0 ? (
                 <tr><td colSpan={7} className="text-center p-4">Chargement...</td></tr>
               ) : categories.length === 0 ? (
                 <tr>

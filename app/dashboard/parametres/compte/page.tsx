@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import { toast } from 'react-toastify';
 
 interface UserInfo {
@@ -30,8 +31,7 @@ const ROLES: Record<string, string> = {
  * connectés — pas de RoleGuard.
  */
 export default function PageCompte() {
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [chargement, setChargement] = useState(true);
+  const { user, loading: chargement, actualiser } = useAuthUser();
 
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
@@ -44,17 +44,10 @@ export default function PageCompte() {
   const [savingMdp, setSavingMdp] = useState(false);
 
   useEffect(() => {
-    axios.get('/api/me', { withCredentials: true })
-      .then((res) => {
-        const u: UserInfo = res.data.user;
-        setUser(u);
-        setNom(u.nom || '');
-        setPrenom(u.prenom || '');
-        setTelephone(u.telephone || '');
-      })
-      .catch(() => {})
-      .finally(() => setChargement(false));
-  }, []);
+    setNom(user?.nom || '');
+    setPrenom(user?.prenom || '');
+    setTelephone(user?.telephone || '');
+  }, [user?._id]);
 
   const enregistrerProfil = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +55,7 @@ export default function PageCompte() {
     try {
       await axios.patch('/api/me', { nom, prenom, telephone }, { withCredentials: true });
       toast.success('Profil mis à jour');
+      void actualiser();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erreur lors de la mise à jour');
     } finally {

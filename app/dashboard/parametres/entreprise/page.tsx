@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Form, Badge } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { fmtDate } from '@/lib/format';
 
@@ -19,6 +21,7 @@ interface Entreprise {
   devise?: string;
   statut?: string;
   impression?: { imprimanteDefaut?: string; format?: string; impressionAuto?: boolean };
+  delaiDemandeAnnulationH?: number;
   createdAt?: string;
 }
 
@@ -27,35 +30,20 @@ function EntrepriseInner() {
   const [form, setForm] = useState<Partial<Entreprise>>({});
   const [chargement, setChargement] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [peutModifier, setPeutModifier] = useState(false);
+  const { user, aAction, actualiser } = useAuthUser();
+  const peutModifier = user?.type === 'admin' || user?.type === 'gestionnaire' || aAction('parametrage_general');
+  const lire = useLecture();
 
   const charger = useCallback(() => {
     setChargement(true);
-    axios
-      .get('/api/entreprises/moi', { withCredentials: true })
-      .then((res) => {
-        setEntreprise(res.data?.entreprise || null);
-        setForm(res.data?.entreprise || {});
-      })
-      .catch(() => toast.error("Erreur de chargement de l'entreprise"))
-      .finally(() => setChargement(false));
-  }, []);
+    void lire('/api/entreprises/moi', (data) => {
+      setEntreprise(data?.entreprise || null);
+      setForm(data?.entreprise || {});
+    }, () => toast.error("Erreur de chargement de l'entreprise"), () => setChargement(false));
+  }, [lire]);
 
   useEffect(() => {
     charger();
-    fetch('/api/me', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const u = data?.user;
-        setPeutModifier(
-          !!u &&
-            (u.type === 'admin' ||
-              u.type === 'gestionnaire' ||
-              u.permissions?.actions?.includes('*') ||
-              u.permissions?.actions?.includes('parametrage_general'))
-        );
-      })
-      .catch(() => {});
   }, [charger]);
 
   const set = (k: keyof Entreprise) => (e: any) =>
@@ -74,6 +62,7 @@ function EntrepriseInner() {
         ville: form.ville,
         pays: form.pays,
         devise: form.devise,
+        delaiDemandeAnnulationH: Number(form.delaiDemandeAnnulationH ?? 24),
         impression: {
           imprimanteDefaut: form.impression?.imprimanteDefaut || '',
           format: form.impression?.format || 'thermique80',
@@ -81,6 +70,8 @@ function EntrepriseInner() {
         },
       }, { withCredentials: true });
       setEntreprise(res.data?.entreprise || null);
+      setForm(res.data?.entreprise || {});
+      void actualiser();
       toast.success('Fiche entreprise enregistrée');
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement");
@@ -161,6 +152,29 @@ function EntrepriseInner() {
                 <Form.Group className="mb-3">
                   <Form.Label>Devise</Form.Label>
                   <Form.Control value={form.devise || 'FCFA'} onChange={set('devise')} disabled={!peutModifier} />
+                </Form.Group>
+              </div>
+            </div>
+
+            <hr />
+            <h6 className="fw-semibold mb-3"><i className="bi bi-arrow-counterclockwise me-2"></i>Annulations de vente</h6>
+            <div className="row">
+              <div className="col-md-6">
+                <Form.Group className="mb-3">
+                  <Form.Label>Délai de demande d'annulation (heures)</Form.Label>
+                  <Form.Control
+                    type="number" min={0} max={720}
+                    value={form.delaiDemandeAnnulationH ?? 24}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, delaiDemandeAnnulationH: Number(e.target.value) }))
+                    }
+                    disabled={!peutModifier}
+                  />
+                  <Form.Text className="text-muted">
+                    Fenêtre pendant laquelle un opérateur peut demander l'annulation
+                    d'une vente (0 = sans limite). La demande reste impossible dès que
+                    la caisse de la vente est clôturée.
+                  </Form.Text>
                 </Form.Group>
               </div>
             </div>

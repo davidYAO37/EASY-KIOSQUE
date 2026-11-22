@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Dropdown, Form } from "react-bootstrap";
 import { useKiosque } from "@/hooks/useKiosque";
+import { useAuthUser } from "@/hooks/useAuthUser";
 import { fmtMontant } from "@/lib/format";
 import type { NotificationDTO } from "@/types/ventes";
 
@@ -19,53 +19,22 @@ interface EntrepriseInfo {
  */
 function ClocheNotifications() {
   const router = useRouter();
-  const [notifs, setNotifs] = useState<NotificationDTO[]>([]);
-  const [nonLues, setNonLues] = useState(0);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    const charger = () =>
-      fetch("/api/notifications?limit=8", { credentials: "include" })
-        .then((res) => {
-          if (res.status === 403) {
-            setVisible(false);
-            return null;
-          }
-          return res.ok ? res.json() : null;
-        })
-        .then((data) => {
-          if (data) {
-            setVisible(true);
-            setNotifs(data.notifications || []);
-            setNonLues(data.nonLues || 0);
-          }
-        })
-        .catch(() => {});
-    charger();
-    timer = setInterval(charger, 30_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  if (!visible) return null;
+  const { notifications: notifs, nonLues, actualiserNotifications } = useAuthUser();
 
   const toutLire = async () => {
-    await fetch("/api/notifications/tout-lire", {
+    const res = await fetch("/api/notifications/tout-lire", {
       method: "POST",
       credentials: "include",
     });
-    setNonLues(0);
-    setNotifs((ns) => ns.map((n) => ({ ...n, lue: true })));
+    if (res.ok) actualiserNotifications();
   };
 
   const ouvrir = async (n: NotificationDTO) => {
     if (!n.lue) {
-      fetch(`/api/notifications/${n._id}`, {
-        method: "PATCH",
-        credentials: "include",
-      }).catch(() => {});
-      setNonLues((c) => Math.max(0, c - 1));
-      setNotifs((ns) => ns.map((x) => (x._id === n._id ? { ...x, lue: true } : x)));
+      try {
+        const res = await fetch(`/api/notifications/${n._id}`, { method: 'PATCH', credentials: 'include' });
+        if (res.ok) actualiserNotifications();
+      } catch {}
     }
     router.push("/dashboard/notifications");
   };
@@ -124,25 +93,10 @@ function ClocheNotifications() {
 export default function Header() {
   const router = useRouter();
   const { kiosqueId, kiosques, changerKiosque } = useKiosque();
-  const [userName, setUserName] = useState("");
-  const [userType, setUserType] = useState("");
-  const [entreprise, setEntreprise] = useState<EntrepriseInfo | null>(null);
-  const [isSuper, setIsSuper] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/me", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const u = data?.user;
-        if (u) {
-          setUserName(`${u.nom || ""} ${u.prenom || ""}`.trim());
-          setUserType(u.type || "");
-          setIsSuper(u.type === "adminsuper");
-        }
-        if (data?.entreprise) setEntreprise(data.entreprise);
-      })
-      .catch(() => {});
-  }, []);
+  const { user, entreprise, effacer } = useAuthUser();
+  const userName = `${user?.nom || ''} ${user?.prenom || ''}`.trim();
+  const userType = user?.type || '';
+  const isSuper = userType === 'adminsuper';
 
   // Cloche réservée au propriétaire/gestionnaire d'une entreprise —
   // le super-admin plateforme et les opérateurs ne la voient pas
@@ -150,9 +104,11 @@ export default function Header() {
   const afficherCloche = ["admin", "gestionnaire"].includes(userType);
 
   const handleLogout = async () => {
+    if (!window.dispatchEvent(new Event('ek-kiosque-avant-changement', { cancelable: true }))) return;
     try {
       await fetch("/api/logout", { method: "POST", credentials: "include" });
     } finally {
+      effacer();
       localStorage.removeItem("profil");
       localStorage.removeItem("nom_utilisateur");
       localStorage.removeItem("ek_kiosque_id");
@@ -178,6 +134,7 @@ export default function Header() {
               onChange={(e) => changerKiosque(e.target.value)}
               aria-label="Kiosque actif"
             >
+              <option value="">Tous les kiosques</option>
               {kiosques.map((k) => (
                 <option key={k._id} value={k._id}>
                   {k.code} — {k.designation}

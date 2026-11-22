@@ -5,6 +5,8 @@ import {
   Badge, Button, Card, Col, Form, Row, Spinner, Table,
 } from 'react-bootstrap';
 import axios from 'axios';
+import { toast } from 'react-toastify';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 
 interface Entree {
@@ -40,6 +42,7 @@ function fmtDate(d?: string) {
  * ni supprimables — argument anti-fraude interne.
  */
 export default function PageJournal() {
+  const lire = useLecture();
   const [entrees, setEntrees] = useState<Entree[]>([]);
   const [modules, setModules] = useState<string[]>([]);
   const [kiosques, setKiosques] = useState<KiosqueLite[]>([]);
@@ -63,17 +66,13 @@ export default function PageJournal() {
     if (action) params.set('action', action);
     if (du) params.set('du', du);
     if (au) params.set('au', au);
-    axios
-      .get(`/api/journal?${params}`, { withCredentials: true })
-      .then((res) => {
-        setEntrees(res.data.entrees || []);
-        setModules(res.data.modules || []);
-        setTotal(res.data.total || 0);
-        setPages(res.data.pages || 1);
-      })
-      .catch(() => {})
-      .finally(() => setChargement(false));
-  }, [kiosqueId, module, action, du, au, page]);
+    void lire(`/api/journal?${params}`, (data) => {
+      setEntrees(data.entrees || []);
+      setModules(data.modules || []);
+      setTotal(data.total || 0);
+      setPages(data.pages || 1);
+    }, () => toast.error('Impossible d’actualiser le journal'), () => setChargement(false));
+  }, [kiosqueId, module, action, du, au, page, lire]);
 
   useEffect(() => { charger(); }, [charger]);
 
@@ -139,12 +138,13 @@ export default function PageJournal() {
 
         <Card className="shadow-sm">
           <Card.Body className="p-0">
-            {chargement ? (
+            {chargement && entrees.length === 0 ? (
               <div className="text-center py-5"><Spinner animation="border" /></div>
             ) : entrees.length === 0 ? (
               <div className="text-center py-5 text-muted">Aucune entrée pour ces filtres.</div>
             ) : (
-              <Table responsive hover className="mb-0 align-middle">
+              <Table responsive hover className="mb-0 align-middle" aria-busy={chargement}>
+                {chargement && <caption className="caption-top small">Actualisation…</caption>}
                 <thead className="table-light">
                   <tr>
                     <th>Date / heure</th>

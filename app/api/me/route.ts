@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ user, entreprise });
+  return NextResponse.json({ user, entreprise }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 /**

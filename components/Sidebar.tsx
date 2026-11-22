@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuthUser } from "@/hooks/useAuthUser";
 import { Badge, Nav, Offcanvas } from "react-bootstrap";
 
 interface MenuItem {
@@ -78,17 +79,16 @@ const MENU: { title?: string; items: MenuItem[] }[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, effacer, nonLues, actualiserNotifications } = useAuthUser();
   const [services, setServices] = useState<string[] | null>(null);
   const [userName, setUserName] = useState("");
   const [userType, setUserType] = useState("");
   const [showMenu, setShowMenu] = useState(false);
-  const [notifs, setNotifs] = useState<Notifs | null>(null);
+  const notifs = { nonLues };
 
   useEffect(() => {
-    fetch("/api/me", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const u = data?.user;
+    {
+        const u = user;
         if (u) {
           setUserName(`${u.nom || ""} ${u.prenom || ""}`.trim());
           setUserType(u.type || "");
@@ -102,9 +102,8 @@ export default function Sidebar() {
             setServices(u.permissions?.services || []);
           }
         }
-      })
-      .catch(() => {});
-  }, []);
+      }
+  }, [user]);
 
   // L'offcanvas se ferme automatiquement après navigation
   useEffect(() => { setShowMenu(false); }, [pathname]);
@@ -114,11 +113,8 @@ export default function Sidebar() {
   // rechargé à chaque changement de page
   useEffect(() => {
     if (userType !== "admin" && userType !== "gestionnaire") return;
-    fetch("/api/notifications?limit=1", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => data && setNotifs({ nonLues: data.nonLues || 0 }))
-      .catch(() => setNotifs({ nonLues: 0 }));
-  }, [pathname, userType]);
+    actualiserNotifications();
+  }, [pathname, userType, actualiserNotifications]);
 
   const isVisible = (service: string) => {
     if (service === "notifications") {
@@ -156,9 +152,11 @@ export default function Sidebar() {
   };
 
   const handleLogout = async () => {
+    if (!window.dispatchEvent(new Event('ek-kiosque-avant-changement', { cancelable: true }))) return;
     try {
       await fetch("/api/logout", { method: "POST", credentials: "include" });
     } finally {
+      effacer();
       localStorage.removeItem("profil");
       localStorage.removeItem("nom_utilisateur");
       localStorage.removeItem("ek_kiosque_id");

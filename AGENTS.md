@@ -12,6 +12,13 @@ node ./node_modules/next/dist/bin/next dev -H 0.0.0.0 -p 3002   # 3000 easy_medi
 
 Compte plateforme (seed) : `superadmin@easy-kiosque.local` / `admin123`.
 
+## Chargements et isolation côté navigateur
+
+- Session et notifications partagées : `SessionProvider` dans `hooks/useAuthUser.ts` ; kiosque partagé : `KiosqueProvider` dans `hooks/useKiosque.ts`. Les données d’interface sont réinitialisées au changement d’utilisateur/entreprise ; les contrôles API restent obligatoires.
+- Lectures concurrentes : `hooks/useLecture.ts` annule les requêtes remplacées et ignore leurs réponses ; `useActualisation` réagit à la synchronisation hors-ligne.
+- Files hors-ligne : clés localStorage suffixées par entreprise ET utilisateur. Les anciennes clés non cloisonnées ne sont ni supprimées ni synchronisées automatiquement ; vérifier leur rattachement avant migration. Les envois portent des en-têtes de propriétaire comparés à la session serveur.
+- Régression sans base réelle : `node scripts/test_offline_isolation.mjs`. `scripts/test_chargements_ui.mjs` est un scénario pour le runner de la skill `browser-automation` (`--script`), avec API simulées ; serveur Next en fonctionnement requis.
+
 ## Variables d'environnement
 
 `MONGO_URI` (ou `MONGODB_URI`), `JWT_SECRET`, `COOKIE_SECURE=false` (HTTP local), `NEXT_PUBLIC_BASE_URL`. `LICENCE_SECRET` réservé pour la V2 (abonnements).

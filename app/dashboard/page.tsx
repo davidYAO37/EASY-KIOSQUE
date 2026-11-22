@@ -42,7 +42,14 @@ function iconeMode(mode: string): string {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, entreprise, loading } = useAuthUser();
-  const { kiosques, kiosqueId, changerKiosque } = useKiosque();
+  const { kiosques, kiosqueId, changerKiosque, loading: chargKiosques } = useKiosque();
+  const [erreur, setErreur] = useState(false);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const actualiser = () => setVersion((v) => v + 1);
+    window.addEventListener('ek-donnees-change', actualiser);
+    return () => window.removeEventListener('ek-donnees-change', actualiser);
+  }, []);
   const [tb, setTb] = useState<TB | null>(null);
   const [chargement, setChargement] = useState(true);
 
@@ -53,19 +60,25 @@ export default function DashboardPage() {
   }, [user, router]);
 
   useEffect(() => {
+    if (loading || chargKiosques || !user || user.type === 'adminsuper') return;
+    const controller = new AbortController();
     setChargement(true);
+    setTb(null);
+    setErreur(false);
     const params = kiosqueId ? `?kiosqueId=${kiosqueId}` : '';
-    fetch(`/api/rapports/tableau-bord${params}`, { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setTb(data))
-      .catch(() => {})
-      .finally(() => setChargement(false));
-  }, [kiosqueId]);
+    fetch(`/api/rapports/tableau-bord${params}`, { credentials: 'include', cache: 'no-store', signal: controller.signal })
+      .then((res) => { if (!res.ok) throw new Error('Tableau de bord indisponible'); return res.json(); })
+      .then((data) => { if (!controller.signal.aborted) setTb(data); })
+      .catch(() => { if (!controller.signal.aborted) setErreur(true); })
+      .finally(() => { if (!controller.signal.aborted) setChargement(false); });
+    return () => controller.abort();
+  }, [kiosqueId, chargKiosques, loading, user?._id, user?.type, version]);
 
   if (loading || (chargement && !tb)) {
     return <div className="text-center p-5"><div className="spinner-border text-primary"></div></div>;
   }
 
+  if (erreur) return <div role="alert" className="alert alert-warning">Impossible de charger les indicateurs. Changez de kiosque ou revenez sur cette page pour réessayer.</div>;
   const devise = entreprise?.devise || 'FCFA';
   const j = tb?.jour;
   const serie = (tb?.serie7j || []).map((s) => ({ ...s, jour: s.date.slice(8) + '/' + s.date.slice(5, 7) }));

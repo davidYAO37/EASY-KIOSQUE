@@ -9,6 +9,8 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts';
 import axios from 'axios';
+import { toast } from 'react-toastify';
+import { useActualisation, useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { fmtMontant, fmtDate } from '@/lib/format';
@@ -33,6 +35,8 @@ function RapportsInner() {
   const [fKiosque, setFKiosque] = useState('');
   const [du, setDu] = useState(aujourdhuiIlYa(30));
   const [au, setAu] = useState(aujourdhuiIlYa(0));
+  const [periode, setPeriode] = useState({ du, au });
+  const lire = useLecture();
   const [data, setData] = useState<any>(null);
   const [chargement, setChargement] = useState(false);
 
@@ -44,24 +48,23 @@ function RapportsInner() {
 
   const charger = useCallback(() => {
     setChargement(true);
-    const params = new URLSearchParams({ du, au });
+    const params = new URLSearchParams(periode);
     if (fKiosque && onglet !== 'kiosques') params.set('kiosqueId', fKiosque);
     const url = onglet === 'credits'
       ? `/api/rapports/credits?${fKiosque ? `kiosqueId=${fKiosque}` : ''}`
       : `/api/rapports/${onglet}?${params}`;
-    axios.get(url, { withCredentials: true })
-      // `_onglet` marque la réponse : le rendu n'utilise les données que si
-      // elles correspondent à l'onglet affiché (changement d'onglet ou
-      // réponse arrivée en retard → pas de crash sur la mauvaise forme).
-      .then((res) => setData({ ...res.data, _onglet: onglet }))
-      .catch(() => setData(null))
-      .finally(() => setChargement(false));
-  }, [onglet, du, au, fKiosque]);
+    // `_onglet` marque la réponse : le rendu n'utilise les données que si
+    // elles correspondent à l'onglet affiché (changement d'onglet ou
+    // réponse arrivée en retard → pas de crash sur la mauvaise forme).
+    void lire(url, (resultat) => setData({ ...resultat, _onglet: onglet }),
+      () => toast.error('Impossible d’actualiser le rapport'), () => setChargement(false), 'rapport');
+  }, [onglet, periode, fKiosque, lire]);
 
+  useActualisation(charger);
   useEffect(() => { charger(); }, [charger]);
 
   const exporter = () => {
-    const params = new URLSearchParams({ type: onglet === 'kiosques' ? 'kiosques' : onglet, du, au });
+    const params = new URLSearchParams({ type: onglet === 'kiosques' ? 'kiosques' : onglet, ...periode });
     if (fKiosque && onglet !== 'kiosques') params.set('kiosqueId', fKiosque);
     window.open(`/api/rapports/export?${params}`, '_blank');
   };
@@ -104,7 +107,8 @@ function RapportsInner() {
                 </Form.Select>
               </Col>
             )}
-            <Col md={3} className="d-flex gap-2">
+            <Col md={3} className="d-flex gap-2 flex-wrap">
+              <Button size="sm" disabled={chargement || !du || !au || du > au} onClick={() => setPeriode({ du, au })}>Appliquer</Button>
               <Button size="sm" variant="outline-secondary" onClick={() => { setDu(aujourdhuiIlYa(0)); setAu(aujourdhuiIlYa(0)); }}>Aujourd&apos;hui</Button>
               <Button size="sm" variant="outline-secondary" onClick={() => { setDu(aujourdhuiIlYa(7)); setAu(aujourdhuiIlYa(0)); }}>7 j</Button>
               <Button size="sm" variant="outline-secondary" onClick={() => { setDu(aujourdhuiIlYa(30)); setAu(aujourdhuiIlYa(0)); }}>30 j</Button>
@@ -117,7 +121,7 @@ function RapportsInner() {
       {!chargement && !data && <div className="alert alert-warning">Aucune donnée pour cette période.</div>}
 
       {/* ---------- VENTES ---------- */}
-      {!chargement && onglet === 'ventes' && data?._onglet === 'ventes' && data?.totaux && (
+      {onglet === 'ventes' && data?._onglet === 'ventes' && data?.totaux && (
         <>
           <Row className="g-3 mb-3">
             {[
@@ -263,7 +267,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- COMPARAISON KIOSQUES ---------- */}
-      {!chargement && onglet === 'kiosques' && data?._onglet === 'kiosques' && data?.kiosques && (
+      {onglet === 'kiosques' && data?._onglet === 'kiosques' && data?.kiosques && (
         <>
           <Card className="mb-3">
             <Card.Header className="bg-white fw-semibold">Chiffre d&apos;affaires et résultat net par kiosque</Card.Header>
@@ -315,7 +319,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- DÉPENSES ---------- */}
-      {!chargement && onglet === 'depenses' && data?._onglet === 'depenses' && data?.totaux && (
+      {onglet === 'depenses' && data?._onglet === 'depenses' && data?.totaux && (
         <Row className="g-3">
           <Col lg={7}>
             <Card className="mb-3">
@@ -364,7 +368,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- CRÉANCES ---------- */}
-      {!chargement && onglet === 'credits' && data?._onglet === 'credits' && data?.totaux && (
+      {onglet === 'credits' && data?._onglet === 'credits' && data?.totaux && (
         <Row className="g-3">
           <Col lg={8}>
             <Card>
@@ -407,7 +411,7 @@ function RapportsInner() {
       )}
 
       {/* ---------- CAISSES ---------- */}
-      {!chargement && onglet === 'caisses' && data?._onglet === 'caisses' && data?.sessions && (
+      {onglet === 'caisses' && data?._onglet === 'caisses' && data?.sessions && (
         <Card>
           <Card.Header className="bg-white fw-semibold d-flex justify-content-between">
             <span>Sessions de caisse</span>

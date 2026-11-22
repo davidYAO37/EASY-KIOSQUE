@@ -71,6 +71,36 @@ export interface ListeVentes {
   page: number;
   pages: number;
   limit: number;
+  /** Récap des encaissements validés sur le filtre courant, par mode. */
+  recapPaiements?: { mode: string; montant: number; nombre: number }[];
+}
+
+export type StatutDemandeAnnulation = "en_attente" | "approuvee" | "rejetee";
+
+export interface DemandeAnnulationDTO {
+  _id: string;
+  venteId: string;
+  numeroVente: string;
+  montantTotal: number;
+  dateVente?: string;
+  kiosqueId?: string;
+  kiosque?: { _id: string; code: string; designation: string } | null;
+  demandeurId: string;
+  demandeurNom: string;
+  motif: string;
+  statut: StatutDemandeAnnulation;
+  traiteLe?: string | null;
+  traiteParNom?: string | null;
+  motifRejet?: string | null;
+  createdAt?: string;
+}
+
+export interface ListeDemandesAnnulation {
+  demandes: DemandeAnnulationDTO[];
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
 }
 
 export interface NotificationDTO {

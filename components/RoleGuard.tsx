@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useAuthUser } from "@/hooks/useAuthUser";
 import { useRouter } from "next/navigation";
 import { ROLE_HOME, SERVICE_HOME, matchesAllowedRoles } from "@/lib/permissions";
 
@@ -23,57 +24,24 @@ interface RoleGuardProps {
  * l'authentification, pas le rôle.
  */
 export default function RoleGuard({ allowedRoles, allowedActions, strict, children }: RoleGuardProps) {
-  const [status, setStatus] = useState<"loading" | "allowed" | "denied">("loading");
+  const { user, loading } = useAuthUser();
+  const type = user?.type;
+  const userServices = user?.permissions?.services || [];
+  const userActions = user?.permissions?.actions || [];
+  const allowed = !!type && (strict ? allowedRoles.includes(type) :
+    type === 'adminsuper' || type === 'admin' || allowedRoles.includes(type) ||
+    matchesAllowedRoles({ type, permissions: { services: userServices, customized: true } }, allowedRoles) ||
+    (!!allowedActions?.length && (userActions.includes('*') || allowedActions.some((a) => userActions.includes(a)))));
+  const status = loading ? 'loading' : allowed ? 'allowed' : 'denied';
   const router = useRouter();
 
   useEffect(() => {
-    let cancelled = false;
-
-    fetch("/api/me", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        const type = data?.user?.type;
-        const userServices: string[] = data?.user?.permissions?.services || [];
-        const userActions: string[] = data?.user?.permissions?.actions || [];
-        const hasAllowedAction =
-          !!allowedActions?.length &&
-          (userActions.includes("*") ||
-            allowedActions.some((a) => userActions.includes(a)));
-        const allowed =
-          !!type &&
-          (strict
-            ? allowedRoles.includes(type)
-            : type === "adminsuper" ||
-              type === "admin" ||
-              allowedRoles.includes(type) ||
-              matchesAllowedRoles(
-                { type, permissions: { services: userServices, customized: true } },
-                allowedRoles
-              ) ||
-              hasAllowedAction);
-        if (allowed) {
-          setStatus("allowed");
-        } else {
-          setStatus("denied");
-          const home =
-            (type && ROLE_HOME[type]) ||
-            (userServices.length > 0 && SERVICE_HOME[userServices[0]]) ||
-            "/connexion";
-          setTimeout(() => {
-            if (!cancelled) router.replace(home);
-          }, 1200);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setStatus("denied");
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    if (status !== 'denied') return;
+    const home = (type && ROLE_HOME[type]) || (userServices[0] && SERVICE_HOME[userServices[0]]) || '/connexion';
+    const timer = setTimeout(() => router.replace(home), 1200);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [status, type, router]);
 
   if (status === "loading") {
     return <div className="text-center p-5">Chargement...</div>;

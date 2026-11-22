@@ -5,6 +5,9 @@ import {
   Badge, Button, Card, Col, Form, ListGroup, Row, Spinner,
 } from 'react-bootstrap';
 import axios from 'axios';
+import { toast } from 'react-toastify';
+import { useLecture } from '@/hooks/useLecture';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import { fmtMontant } from '@/lib/format';
 import type { NotificationDTO } from '@/types/ventes';
 
@@ -23,6 +26,8 @@ const ICONES: Record<string, { icon: string; bg: string }> = {
  * Réservé à admin/gestionnaire — l'API renvoie 403 sinon.
  */
 export default function PageNotifications() {
+  const lire = useLecture();
+  const { actualiserNotifications } = useAuthUser();
   const [notifs, setNotifs] = useState<NotificationDTO[]>([]);
   const [nonLues, setNonLues] = useState(0);
   const [kiosques, setKiosques] = useState<KiosqueLite[]>([]);
@@ -41,17 +46,14 @@ export default function PageNotifications() {
     if (seulementNonLues) params.set('lues', '0');
     if (du) params.set('du', du);
     if (au) params.set('au', au);
-    axios
-      .get(`/api/notifications?${params}`, { withCredentials: true })
-      .then((res) => {
-        setNotifs(res.data.notifications || []);
-        setNonLues(res.data.nonLues || 0);
-      })
-      .catch((e) => {
-        if (e?.response?.status === 403) setInterdit(true);
-      })
-      .finally(() => setChargement(false));
-  }, [kiosqueId, seulementNonLues, du, au]);
+    void lire(`/api/notifications?${params}`, (data) => {
+      setNotifs(data.notifications || []);
+      setNonLues(data.nonLues || 0);
+    }, (e) => {
+      if (e?.response?.status === 403) setInterdit(true);
+      else toast.error('Impossible d’actualiser les notifications');
+    }, () => setChargement(false));
+  }, [kiosqueId, seulementNonLues, du, au, lire]);
 
   useEffect(() => { charger(); }, [charger]);
 
@@ -65,16 +67,20 @@ export default function PageNotifications() {
     if (n.lue) return;
     try {
       await axios.patch(`/api/notifications/${n._id}`, {}, { withCredentials: true });
-      setNotifs((ns) => ns.map((x) => (x._id === n._id ? { ...x, lue: true } : x)));
+      setNotifs((ns) => seulementNonLues ? ns.filter((x) => x._id !== n._id) : ns.map((x) => (x._id === n._id ? { ...x, lue: true } : x)));
       setNonLues((c) => Math.max(0, c - 1));
+      actualiserNotifications();
+      charger();
     } catch {}
   };
 
   const toutLire = async () => {
     try {
       await axios.post('/api/notifications/tout-lire', {}, { withCredentials: true });
-      setNotifs((ns) => ns.map((n) => ({ ...n, lue: true })));
+      setNotifs((ns) => seulementNonLues ? [] : ns.map((n) => ({ ...n, lue: true })));
       setNonLues(0);
+      actualiserNotifications();
+      charger();
     } catch {}
   };
 
@@ -126,7 +132,7 @@ export default function PageNotifications() {
       </Card>
 
       <Card>
-        {chargement ? (
+        {chargement && notifs.length === 0 ? (
           <div className="text-center py-5"><Spinner animation="border" /></div>
         ) : notifs.length === 0 ? (
           <div className="text-center text-muted py-5">Aucune notification</div>

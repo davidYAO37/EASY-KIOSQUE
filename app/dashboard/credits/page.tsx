@@ -7,6 +7,7 @@ import {
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useActualisation, useLecture } from '@/hooks/useLecture';
 import { useReactToPrint } from 'react-to-print';
 import RoleGuard from '@/components/RoleGuard';
 import RecuRemboursement from '@/components/ventes/RecuRemboursement';
@@ -27,7 +28,9 @@ interface KiosqueLite { _id: string; code: string; designation: string }
  * remboursements et impression de reçu.
  */
 function CreditsInner() {
-  const { aAction } = useAuthUser();
+  const { aAction, actualiserNotifications } = useAuthUser();
+  const lire = useLecture();
+  const lireClient = useLecture();
   const { kiosqueId: kiosqueCourant } = useKiosque();
   const peutEncaisser = aAction('enregistrer_remboursement');
 
@@ -52,6 +55,7 @@ function CreditsInner() {
   // Encaissement
   const [showEnc, setShowEnc] = useState(false);
   const [clients, setClients] = useState<ClientDTO[]>([]);
+  const [clientsRecherche, setClientsRecherche] = useState<ClientDTO[]>([]);
   const [rechClient, setRechClient] = useState('');
   const [clientSel, setClientSel] = useState<ClientDTO | null>(null);
   const [creancesClient, setCreancesClient] = useState<CreanceDTO[]>([]);
@@ -91,13 +95,10 @@ function CreditsInner() {
     if (fClient) params.set('clientId', fClient);
     if (du) params.set('du', du);
     if (au) params.set('au', au);
-    axios.get<ListeCreances>(`/api/credits?${params}`, { withCredentials: true })
-      .then((res) => setCreances(res.data))
-      .catch((e) => {
-        if (e?.response?.status !== 403) toast.error('Erreur de chargement des créances');
-      })
-      .finally(() => setChargementC(false));
-  }, [page, fStatut, fKiosque, fClient, du, au]);
+    void lire<ListeCreances>(`/api/credits?${params}`, setCreances, (e) => {
+      if (e?.response?.status !== 403) toast.error('Erreur de chargement des créances');
+    }, () => setChargementC(false));
+  }, [page, fStatut, fKiosque, fClient, du, au, lire]);
 
   const chargerRmb = useCallback(() => {
     setChargementR(true);
@@ -106,12 +107,11 @@ function CreditsInner() {
     if (fClient) params.set('clientId', fClient);
     if (du) params.set('du', du);
     if (au) params.set('au', au);
-    axios.get<ListeRemboursements>(`/api/remboursements?${params}`, { withCredentials: true })
-      .then((res) => setRmbs(res.data))
-      .catch(() => toast.error('Erreur de chargement'))
-      .finally(() => setChargementR(false));
-  }, [pageR, fKiosque, fClient, du, au]);
+    void lire<ListeRemboursements>(`/api/remboursements?${params}`, setRmbs,
+      () => toast.error('Erreur de chargement'), () => setChargementR(false));
+  }, [pageR, fKiosque, fClient, du, au, lire]);
 
+  useActualisation(chargerCreances);
   useEffect(() => { if (onglet === 'creances') chargerCreances(); }, [chargerCreances, onglet]);
   useEffect(() => { if (onglet === 'remboursements') chargerRmb(); }, [chargerRmb, onglet]);
 
@@ -119,20 +119,32 @@ function CreditsInner() {
   useEffect(() => {
     if (!showEnc) return;
     const t = setTimeout(() => {
-      axios.get(`/api/clients?recherche=1&q=${encodeURIComponent(rechClient)}`, { withCredentials: true })
-        .then((res) => setClients(res.data?.clients || []))
-        .catch(() => {});
+      void lireClient(`/api/clients?recherche=1&q=${encodeURIComponent(rechClient)}`,
+        (data) => setClientsRecherche(data?.clients || []));
     }, 300);
     return () => clearTimeout(t);
-  }, [rechClient, showEnc]);
+  }, [rechClient, showEnc, lireClient]);
 
   const choisirClient = async (c: ClientDTO) => {
     setClientSel(c);
     setVentilation({});
     setManuel(false);
-    const res = await axios.get(`/api/credits?clientId=${c._id}&limit=100`, { withCredentials: true });
-    setCreancesClient((res.data?.creances || []).filter((x: CreanceDTO) => x.solde > 0));
+    setCreancesClient([]);
+    await lireClient(`/api/credits?clientId=${c._id}&limit=100`,
+      (data) => setCreancesClient((data?.creances || []).filter((x: CreanceDTO) => x.solde > 0)),
+      () => toast.error('Impossible de charger les créances du client'));
   };
+
+  useEffect(() => {
+    const proteger = (e: Event) => {
+      if (enCours || (showEnc && !window.confirm('Un encaissement est en cours de saisie. L’abandonner et continuer ?'))) e.preventDefault();
+    };
+    window.addEventListener('ek-kiosque-avant-changement', proteger);
+    return () => window.removeEventListener('ek-kiosque-avant-changement', proteger);
+  }, [enCours, showEnc]);
+  useEffect(() => {
+    setShowEnc(false); setClientSel(null); setCreancesClient([]); setMontant(''); setReference('');
+  }, [kiosqueCourant]);
 
   const montantNum = Number(montant) || 0;
 
@@ -164,14 +176,21 @@ function CreditsInner() {
       }
       const res = await axios.post('/api/remboursements', body, { withCredentials: true });
       toast.success(`Remboursement ${res.data.remboursement.numero} enregistré`);
-      const r = await axios.get(`/api/remboursements/${res.data.remboursement._id}/recu`, { withCredentials: true });
-      setRecu(r.data.recu);
       setShowEnc(false);
       setClientSel(null);
       setMontant('');
       setReference('');
       cleIdempotence.current = crypto.randomUUID();
+      setCreancesClient([]);
       chargerCreances();
+      if (onglet === 'remboursements') chargerRmb();
+      actualiserNotifications();
+      try {
+        const r = await axios.get(`/api/remboursements/${res.data.remboursement._id}/recu`, { withCredentials: true, timeout: 20000 });
+        setRecu(r.data.recu);
+      } catch {
+        toast.warning('Remboursement enregistré. Reçu indisponible : réimprimez-le depuis les remboursements.');
+      }
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erreur');
     } finally {
@@ -253,7 +272,7 @@ function CreditsInner() {
                 </tr>
               </thead>
               <tbody>
-                {chargementC ? (
+                {chargementC && creances.creances.length === 0 ? (
                   <tr><td colSpan={8} className="text-center py-4"><Spinner animation="border" size="sm" /></td></tr>
                 ) : creances.creances.length === 0 ? (
                   <tr><td colSpan={8} className="text-center text-muted py-4">Aucune créance</td></tr>
@@ -297,7 +316,7 @@ function CreditsInner() {
                 </tr>
               </thead>
               <tbody>
-                {chargementR ? (
+                {chargementR && rmbs.remboursements.length === 0 ? (
                   <tr><td colSpan={8} className="text-center py-4"><Spinner animation="border" size="sm" /></td></tr>
                 ) : rmbs.remboursements.length === 0 ? (
                   <tr><td colSpan={8} className="text-center text-muted py-4">Aucun remboursement</td></tr>
@@ -347,9 +366,9 @@ function CreditsInner() {
                 value={rechClient}
                 onChange={(e) => setRechClient(e.target.value)}
               />
-              {clients.length > 0 && !clientSel && (
+              {clientsRecherche.length > 0 && !clientSel && (
                 <div className="border rounded mt-1" style={{ maxHeight: 160, overflowY: 'auto' }}>
-                  {clients.map((c) => (
+                  {clientsRecherche.map((c) => (
                     <button
                       key={c._id}
                       className="btn btn-sm btn-light w-100 text-start"

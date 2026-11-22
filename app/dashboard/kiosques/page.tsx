@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, Form, Modal, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
+import { useKiosque } from '@/hooks/useKiosque';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { fmtDate, STATUTS_KIOSQUE } from '@/lib/format';
 
@@ -27,32 +30,19 @@ function KiosquesInner() {
   const [edition, setEdition] = useState<Kiosque | null>(null);
   const [form, setForm] = useState(VIDE);
   const [saving, setSaving] = useState(false);
-  const [peutGerer, setPeutGerer] = useState(false);
+  const { user, aAction } = useAuthUser();
+  const { actualiserKiosques } = useKiosque();
+  const peutGerer = user?.type === 'admin' || user?.type === 'gestionnaire' || aAction('gerer_kiosques');
+  const lire = useLecture();
 
   const charger = useCallback(() => {
     setChargement(true);
-    axios
-      .get('/api/kiosques', { withCredentials: true })
-      .then((res) => setKiosques(res.data?.kiosques || []))
-      .catch(() => toast.error('Erreur de chargement des kiosques'))
-      .finally(() => setChargement(false));
-  }, []);
+    void lire('/api/kiosques', (data) => setKiosques(data?.kiosques || []),
+      () => toast.error('Erreur de chargement des kiosques'), () => setChargement(false));
+  }, [lire]);
 
   useEffect(() => {
     charger();
-    fetch('/api/me', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const u = data?.user;
-        setPeutGerer(
-          !!u &&
-            (u.type === 'admin' ||
-              u.type === 'gestionnaire' ||
-              u.permissions?.actions?.includes('*') ||
-              u.permissions?.actions?.includes('gerer_kiosques'))
-        );
-      })
-      .catch(() => {});
   }, [charger]);
 
   const ouvrir = (k?: Kiosque) => {
@@ -84,6 +74,7 @@ function KiosquesInner() {
       }
       setShowModal(false);
       charger();
+      actualiserKiosques();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Erreur lors de l\'enregistrement');
     } finally {
@@ -97,6 +88,7 @@ function KiosquesInner() {
       await axios.put(`/api/kiosques/${k._id}`, { statut }, { withCredentials: true });
       toast.success(`Kiosque ${statut === 'actif' ? 'activé' : 'désactivé'}`);
       charger();
+      actualiserKiosques();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Erreur');
     }
@@ -108,6 +100,7 @@ function KiosquesInner() {
       await axios.delete(`/api/kiosques/${k._id}`, { withCredentials: true });
       toast.success('Kiosque désactivé');
       charger();
+      actualiserKiosques();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Erreur');
     }
@@ -126,7 +119,8 @@ function KiosquesInner() {
 
       <Card>
         <Card.Body className="p-0">
-          <Table responsive hover className="mb-0 align-middle">
+          <Table responsive hover className="mb-0 align-middle" aria-busy={chargement}>
+            {chargement && <caption className="caption-top small">Actualisation…</caption>}
             <thead className="table-light">
               <tr>
                 <th>Code</th>
@@ -140,7 +134,7 @@ function KiosquesInner() {
               </tr>
             </thead>
             <tbody>
-              {chargement ? (
+              {chargement && kiosques.length === 0 ? (
                 <tr><td colSpan={8} className="text-center p-4">Chargement...</td></tr>
               ) : kiosques.length === 0 ? (
                 <tr>

@@ -6,6 +6,8 @@ import {
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import Link from 'next/link';
+import { useLecture } from '@/hooks/useLecture';
 import { useReactToPrint } from 'react-to-print';
 import RoleGuard from '@/components/RoleGuard';
 import TicketVente from '@/components/ventes/TicketVente';
@@ -37,7 +39,8 @@ function prixApplique(p: ProduitDTO, kiosqueId: string): number {
 
 function PosInner() {
   const { kiosqueId, kiosques, loading: chargKiosques } = useKiosque();
-  const { user, aAction } = useAuthUser();
+  const { user, aAction, actualiserNotifications } = useAuthUser();
+  const lire = useLecture(kiosqueId);
 
   // Catalogue
   const [categories, setCategories] = useState<CategorieDTO[]>([]);
@@ -70,11 +73,10 @@ function PosInner() {
   useEffect(() => {
     setCaisseOuverte(null);
     if (!kiosqueId) return;
-    axios
-      .get(`/api/caisses/actuelle?kiosqueId=${kiosqueId}`, { withCredentials: true })
-      .then((res) => setCaisseOuverte(Boolean(res.data?.session)))
-      .catch(() => setCaisseOuverte(true)); // le serveur re-tranchera
-  }, [kiosqueId]);
+    void lire(`/api/caisses/actuelle?kiosqueId=${kiosqueId}`,
+      (data) => setCaisseOuverte(data?.session?.statut === 'ouverte'),
+      () => setCaisseOuverte(true)); // le serveur re-tranchera
+  }, [kiosqueId, lire]);
 
   // Validation + ticket
   const [enCours, setEnCours] = useState(false);
@@ -118,24 +120,19 @@ function PosInner() {
     const params = new URLSearchParams({ limit: '60', statut: 'actif' });
     if (qRecherche) params.set('q', qRecherche);
     if (categorieId) params.set('categorieId', categorieId);
-    axios
-      .get<ListeProduits>(`/api/produits?${params}`, { withCredentials: true })
-      .then((res) => setProduits(res.data.produits))
-      .catch(() => toast.error('Erreur de chargement des produits'))
-      .finally(() => setChargementProduits(false));
-  }, [qRecherche, categorieId]);
+    void lire<ListeProduits>(`/api/produits?${params}`, (data) => setProduits(data.produits),
+      () => toast.error('Erreur de chargement des produits'), () => setChargementProduits(false));
+  }, [qRecherche, categorieId, kiosqueId, lire]);
 
   // Recherche clients (vente à crédit)
   useEffect(() => {
     if (typeVente !== 'credit') return;
     const t = setTimeout(() => {
-      axios
-        .get(`/api/clients?recherche=1&q=${encodeURIComponent(rechercheClient)}`, { withCredentials: true })
-        .then((res) => setClients(res.data?.clients || []))
-        .catch(() => {});
+      void lire(`/api/clients?recherche=1&q=${encodeURIComponent(rechercheClient)}`,
+        (data) => setClients(data?.clients || []));
     }, 300);
     return () => clearTimeout(t);
-  }, [rechercheClient, typeVente]);
+  }, [rechercheClient, typeVente, kiosqueId, lire]);
 
   // ---------- Panier ----------
 
@@ -213,9 +210,47 @@ function PosInner() {
     });
   }, [total, typeVente]);
 
+  // Paiement mixte : la première ligne sans montant prend automatiquement
+  // le reste à encaisser (total − somme des montants déjà saisis).
+  const ajusterRestant = useCallback((liste: LignePaiement[]) => {
+    const j = liste.findIndex((p) => p.montant === '');
+    if (j < 0) return liste;
+    const saisi = liste.reduce((s, p) => s + (Number(p.montant) || 0), 0);
+    const restant = Math.max(0, total - saisi);
+    if (restant <= 0) return liste;
+    const copie = [...liste];
+    copie[j] = { ...copie[j], montant: String(restant) };
+    return copie;
+  }, [total]);
+
+  useEffect(() => {
+    const proteger = (e: Event) => {
+      if (enCours || (panier.length > 0 && !window.confirm('Un panier est en cours. Le vider et continuer ?'))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      } else if (panier.length > 0) vider();
+    };
+    const naviguer = (e: MouseEvent) => {
+      const lien = (e.target as Element)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (lien && lien.origin === window.location.origin && lien.pathname !== window.location.pathname) proteger(e);
+    };
+    const quitter = (e: BeforeUnloadEvent) => {
+      if (enCours || panier.length > 0) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('ek-kiosque-avant-changement', proteger);
+    window.addEventListener('click', naviguer, true);
+    window.addEventListener('beforeunload', quitter);
+    return () => {
+      window.removeEventListener('ek-kiosque-avant-changement', proteger);
+      window.removeEventListener('click', naviguer, true);
+      window.removeEventListener('beforeunload', quitter);
+    };
+  }, [panier.length, enCours]);
+
   // ---------- Validation ----------
 
   const valider = async () => {
+    if (!user?.entrepriseId) return toast.warning('Session entreprise requise.');
     if (!kiosqueId) return toast.warning('Sélectionnez un kiosque.');
     if (panier.length === 0) return toast.warning('Le panier est vide.');
     if (typeVente === 'credit' && !clientId) {
@@ -245,7 +280,7 @@ function PosInner() {
       // → synchronisée sans doublon au retour du réseau)
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         const { ajouterVenteHorsLigne } = await import('@/lib/offlineQueue');
-        ajouterVenteHorsLigne(body, total);
+        ajouterVenteHorsLigne(body, total, user);
         toast.info('Hors-ligne : vente conservée localement, synchronisation au retour du réseau');
         vider();
         return;
@@ -258,6 +293,7 @@ function PosInner() {
       );
       const vente = res.data.vente;
       toast.success(`Vente ${vente.numeroVente} enregistrée`);
+      actualiserNotifications();
       // On vide le panier tout de suite : la vente est validée côté serveur,
       // un second clic ne doit plus rien renvoyer pendant la suite.
       vider();
@@ -295,7 +331,8 @@ function PosInner() {
               })),
             idempotencyKey: cleIdempotence.current,
           },
-          total
+          total,
+          user
         );
         toast.info('Connexion perdue : vente conservée localement, synchronisation au retour du réseau');
         vider();
@@ -335,9 +372,9 @@ function PosInner() {
             <Badge bg="success" className="ms-2">{kiosqueActuel.designation}</Badge>
           )}
         </h4>
-        <a href="/dashboard/ventes/historique" className="btn btn-outline-secondary btn-sm">
+        <Link href="/dashboard/ventes/historique" className="btn btn-outline-secondary btn-sm">
           <i className="bi bi-clock-history me-1"></i>Mes ventes / historique
-        </a>
+        </Link>
       </div>
 
       {kiosqueId && caisseOuverte === false && (
@@ -346,7 +383,7 @@ function PosInner() {
           <div>
             <strong>Caisse fermée.</strong> Aucune vente ne peut être enregistrée tant que la caisse
             de ce kiosque n&apos;est pas ouverte.
-            <a href="/dashboard/caisse" className="alert-link ms-2">Ouvrir la caisse</a>
+            <Link href="/dashboard/caisse" className="alert-link ms-2">Ouvrir la caisse</Link>
           </div>
         </div>
       )}
@@ -583,7 +620,18 @@ function PosInner() {
                       value={p.montant}
                       onChange={(e) => {
                         montantSaisi.current = e.target.value !== '';
-                        setPaiements((prev) => prev.map((x, j) => (j === i ? { ...x, montant: e.target.value } : x)));
+                        let v = e.target.value;
+                        setPaiements((prev) => {
+                          // Un montant ne dépasse jamais le reste à payer
+                          // (total − somme des autres lignes).
+                          const autres = prev.reduce((s, x, j) => (j === i ? s : s + (Number(x.montant) || 0)), 0);
+                          const restant = Math.max(0, total - autres);
+                          if (v !== '' && Number(v) > restant) v = String(restant);
+                          const maj = prev.map((x, j) => (j === i ? { ...x, montant: v } : x));
+                          // Champ vidé pour ressaisie : ne pas le re-remplir
+                          // tout de suite ; le reste complète les autres lignes.
+                          return v === '' ? maj : ajusterRestant(maj);
+                        });
                       }}
                     />
                     {p.mode === 'Espèces' && (
@@ -606,8 +654,8 @@ function PosInner() {
                 <Button
                   size="sm"
                   variant="outline-secondary"
-                  onClick={() => setPaiements((prev) => [...prev, { mode: 'Orange Money', montant: '', montantRecu: '' }])}
-                  disabled={paiements.length >= 4}
+                  onClick={() => setPaiements((prev) => ajusterRestant([...prev, { mode: 'Orange Money', montant: '', montantRecu: '' }]))}
+                  disabled={paiements.length >= 4 || total - totalPaye <= 0}
                 >
                   <i className="bi bi-plus-lg me-1"></i>Paiement mixte
                 </Button>

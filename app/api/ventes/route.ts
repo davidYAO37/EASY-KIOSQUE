@@ -45,6 +45,11 @@ export async function POST(req: NextRequest) {
   });
   if (error) return error;
 
+  const auteurFile = req.headers.get('x-ek-offline-user');
+  const entrepriseFile = req.headers.get('x-ek-offline-entreprise');
+  if ((auteurFile && auteurFile !== user!._id) || (entrepriseFile && entrepriseFile !== user!.entrepriseId)) {
+    return NextResponse.json({ message: 'La session a changé. Reconnectez le propriétaire de la file.', code: 'SESSION_MODIFIEE' }, { status: 409 });
+  }
   const parsed = venteCreateSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json(

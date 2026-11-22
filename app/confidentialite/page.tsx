@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export const metadata = { title: 'Politique de confidentialité — EASY-KIOSQUE' };
 
 /**
@@ -62,7 +64,7 @@ export default function PageConfidentialite() {
 
       <hr className="my-4" />
       <p className="small text-muted">
-        <a href="/">← Retour à l'accueil</a> · <a href="/cgu">Conditions d'utilisation</a>
+        <Link href="/">← Retour à l'accueil</Link> · <Link href="/cgu">Conditions d'utilisation</Link>
       </p>
     </div>
   );

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Form, InputGroup, Modal, Pagination, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { fmtMontant } from '@/lib/format';
 import type { CategorieDTO, ListeProduits, ProduitDTO } from '@/types/catalogue';
@@ -28,7 +30,9 @@ function ProduitsInner() {
   const [categories, setCategories] = useState<CategorieDTO[]>([]);
   const [kiosques, setKiosques] = useState<KiosqueLite[]>([]);
   const [chargement, setChargement] = useState(true);
-  const [peutGerer, setPeutGerer] = useState(false);
+  const { user, aAction } = useAuthUser();
+  const peutGerer = user?.type === 'admin' || user?.type === 'gestionnaire' || aAction('gerer_produits');
+  const lire = useLecture();
 
   // Filtres
   const [q, setQ] = useState('');
@@ -60,12 +64,9 @@ function ProduitsInner() {
     if (categorieId) params.set('categorieId', categorieId);
     if (typeProduit) params.set('typeProduit', typeProduit);
     if (statut) params.set('statut', statut);
-    axios
-      .get(`/api/produits?${params}`, { withCredentials: true })
-      .then((res) => setData(res.data))
-      .catch(() => toast.error('Erreur de chargement des produits'))
-      .finally(() => setChargement(false));
-  }, [page, qRecherche, categorieId, typeProduit, statut]);
+    void lire<ListeProduits>(`/api/produits?${params}`, setData,
+      () => toast.error('Erreur de chargement des produits'), () => setChargement(false));
+  }, [page, qRecherche, categorieId, typeProduit, statut, lire]);
 
   useEffect(() => { charger(); }, [charger]);
 
@@ -75,17 +76,6 @@ function ProduitsInner() {
       .catch(() => {});
     axios.get('/api/kiosques', { withCredentials: true })
       .then((res) => setKiosques((res.data?.kiosques || []).filter((k: any) => k.statut !== 'inactif')))
-      .catch(() => {});
-    fetch('/api/me', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((d) => {
-        const u = d?.user;
-        setPeutGerer(
-          !!u && (u.type === 'admin' || u.type === 'gestionnaire' ||
-            u.permissions?.actions?.includes('*') ||
-            u.permissions?.actions?.includes('gerer_produits'))
-        );
-      })
       .catch(() => {});
   }, []);
 
@@ -119,7 +109,21 @@ function ProduitsInner() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setForm((prev) => ({ ...prev, image: String(reader.result) }));
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const ratio = Math.min(1, 320 / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * ratio));
+        canvas.height = Math.max(1, Math.round(image.height * ratio));
+        const contexte = canvas.getContext('2d');
+        if (!contexte) return toast.error('Impossible de préparer cette image');
+        contexte.drawImage(image, 0, 0, canvas.width, canvas.height);
+        setForm((prev) => ({ ...prev, image: canvas.toDataURL('image/webp', 0.8) }));
+      };
+      image.onerror = () => toast.error('Image invalide');
+      image.src = String(reader.result);
+    };
     reader.readAsDataURL(f);
   };
 
@@ -269,7 +273,8 @@ function ProduitsInner() {
 
       <Card>
         <Card.Body className="p-0">
-          <Table responsive hover className="mb-0 align-middle">
+          <Table responsive hover className="mb-0 align-middle" aria-busy={chargement}>
+            {chargement && <caption className="caption-top small">Actualisation…</caption>}
             <thead className="table-light">
               <tr>
                 <th style={{ width: 54 }}></th>
@@ -283,7 +288,7 @@ function ProduitsInner() {
               </tr>
             </thead>
             <tbody>
-              {chargement ? (
+              {chargement && data.produits.length === 0 ? (
                 <tr><td colSpan={8} className="text-center p-4">Chargement...</td></tr>
               ) : data.produits.length === 0 ? (
                 <tr>

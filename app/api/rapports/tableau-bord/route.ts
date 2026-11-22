@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       user!,
       req.nextUrl.searchParams.get("kiosqueId") || undefined
     );
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (e: any) {
     return NextResponse.json(
       { message: e?.message || "Erreur", code: e?.code },

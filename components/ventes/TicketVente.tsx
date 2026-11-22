@@ -23,8 +23,38 @@ const TicketVente = forwardRef<HTMLDivElement, { ticket: TicketVente }>(
           fontFamily: a4 ? "inherit" : "monospace",
           fontSize: a4 ? 14 : 12,
           color: "#000",
+          position: "relative",
         }}
       >
+        {vente.statutVente === "annulee" && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+              zIndex: 1,
+            }}
+          >
+            <div
+              style={{
+                transform: "rotate(-30deg)",
+                fontSize: a4 ? 72 : 40,
+                fontWeight: 900,
+                color: "rgba(220, 53, 69, 0.25)",
+                letterSpacing: 4,
+                whiteSpace: "nowrap",
+                WebkitPrintColorAdjust: "exact",
+                printColorAdjust: "exact",
+              }}
+            >
+              ANNULÉ
+            </div>
+          </div>
+        )}
         <div className="text-center">
           <div style={{ fontSize: a4 ? 20 : 15, fontWeight: 700 }}>{entreprise.nom}</div>
           <div>{kiosque.designation}{kiosque.code ? ` (${kiosque.code})` : ""}</div>
@@ -95,9 +125,59 @@ const TicketVente = forwardRef<HTMLDivElement, { ticket: TicketVente }>(
         <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
         <div className="text-center">
           {vente.statutVente === "annulee" && (
-            <div style={{ fontWeight: 700 }}>*** VENTE ANNULÉE ***</div>
+            <>
+              <div style={{ fontWeight: 700 }}>*** VENTE ANNULÉE ***</div>
+              {vente.annulation && (
+                <div style={{ fontSize: 10 }}>
+                  {vente.annulation.annuleeLe
+                    ? `le ${new Date(vente.annulation.annuleeLe).toLocaleString("fr-FR")}`
+                    : ""}
+                  {vente.annulation.annuleeParNom ? ` par ${vente.annulation.annuleeParNom}` : ""}
+                  {vente.annulation.motif ? ` — ${vente.annulation.motif}` : ""}
+                </div>
+              )}
+            </>
           )}
+          <div>Aucun remboursement n'est autorisé après paiement !</div>
           <div>Merci de votre visite !</div>
+        </div>
+
+        {/* Souche — imprimée après un saut de page : l'imprimante avance
+            le papier, ce qui crée un point de déchirement net pour la
+            partie à conserver au kiosque (page 2 en format A4). */}
+        <div
+          style={{
+            breakBefore: "page",
+            pageBreakBefore: "always",
+            paddingTop: a4 ? 0 : 12,
+            textAlign: "center",
+            fontSize: 10,
+          }}
+        >
+          - - - - - - - - - - ✂ - - - - - - - - - -
+        </div>
+        <div style={{ textAlign: "center", breakInside: "avoid", pageBreakInside: "avoid" }}>
+          <div style={{ fontWeight: 700 }}>SOUCHE — À CONSERVER</div>
+          <div>N° {vente.numeroVente}</div>
+          <div>
+            {vente.dateVente ? new Date(vente.dateVente).toLocaleString("fr-FR") : ""}
+            {" · "}{vente.vendeurNom || "—"}
+          </div>
+          {vente.clientNom && <div>Client : {vente.clientNom}</div>}
+          <div style={{ fontWeight: 700 }}>
+            TOTAL : {fmtMontant(vente.montantTotal)} FCFA
+          </div>
+          <div style={{ fontSize: 10 }}>
+            {(vente.paiements || [])
+              .filter((p) => p.statut !== "annule")
+              .map((p) => `${p.mode} ${fmtMontant(p.montant)} F`)
+              .join(" · ") || "—"}
+          </div>
+          {vente.statutVente === "annulee" && (
+            <div style={{ fontWeight: 700, fontSize: 10 }}>
+              *** ANNULÉE{vente.annulation?.annuleeParNom ? ` par ${vente.annulation.annuleeParNom}` : ""} ***
+            </div>
+          )}
           <div style={{ fontSize: 10 }}>EASY-KIOSQUE</div>
         </div>
       </div>

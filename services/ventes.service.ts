@@ -80,7 +80,8 @@ function porteeVentes(user: CurrentUser, filtre: any) {
   filtre.vendeurId = oid(user._id);
 }
 
-function filtreVentes(user: CurrentUser, f: FiltresVentes) {
+/** Filtre de portée ventes (tenant + rôle) — réutilisé par les demandes d'annulation. */
+export function filtreVentes(user: CurrentUser, f: FiltresVentes) {
   const filtre: any = { entrepriseId: oid(user.entrepriseId!) };
   porteeVentes(user, filtre);
 
@@ -108,10 +109,16 @@ function filtreVentes(user: CurrentUser, f: FiltresVentes) {
   }
   if (f.du || f.au) {
     filtre.dateVente = {};
-    if (f.du) filtre.dateVente.$gte = new Date(f.du);
+    // Date seule (YYYY-MM-DD) → journée entière heure serveur ;
+    // date+heure (datetime-local converti en ISO) → instant exact.
+    if (f.du) {
+      const debut = new Date(f.du);
+      if (!f.du.includes("T")) debut.setHours(0, 0, 0, 0);
+      filtre.dateVente.$gte = debut;
+    }
     if (f.au) {
       const fin = new Date(f.au);
-      fin.setHours(23, 59, 59, 999);
+      if (!f.au.includes("T")) fin.setHours(23, 59, 59, 999);
       filtre.dateVente.$lte = fin;
     }
   }
@@ -189,7 +196,7 @@ export async function listerVentes(
   const limit = Math.min(100, Math.max(1, f.limit || 20));
   const filtre = filtreVentes(user, f);
 
-  const [total, ventes] = await Promise.all([
+  const [total, ventes, recap] = await Promise.all([
     Vente.countDocuments(filtre),
     Vente.find(filtre)
       .populate("kiosqueId", "code designation")
@@ -197,6 +204,29 @@ export async function listerVentes(
       .skip((page - 1) * limit)
       .limit(limit)
       .lean(),
+    // Récap par mode de paiement : on part des ventes filtrées (portée
+    // incluse), puis on rejoint leurs encaissements validés.
+    Vente.aggregate<{ _id: string; montant: number; nombre: number }>([
+      { $match: filtre },
+      {
+        $lookup: {
+          from: "paiements",
+          localField: "_id",
+          foreignField: "venteId",
+          as: "pay",
+        },
+      },
+      { $unwind: "$pay" },
+      { $match: { "pay.statut": "valide", "pay.type": "encaissement_vente" } },
+      {
+        $group: {
+          _id: "$pay.mode",
+          montant: { $sum: "$pay.montant" },
+          nombre: { $sum: 1 },
+        },
+      },
+      { $sort: { montant: -1 } },
+    ]),
   ]);
 
   return {
@@ -205,6 +235,7 @@ export async function listerVentes(
     page,
     pages: Math.max(1, Math.ceil(total / limit)),
     limit,
+    recapPaiements: recap.map((r) => ({ mode: r._id, montant: r.montant, nombre: r.nombre })),
   };
 }
 

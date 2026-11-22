@@ -10,6 +10,7 @@ export { Categorie } from "./categorie";
 export { Produit } from "./produit";
 export { Client } from "./client";
 export { Vente } from "./vente";
+export { DemandeAnnulation } from "./demandeAnnulation";
 export { LigneVente } from "./ligneVente";
 export { Paiement } from "./paiement";
 export { Creance } from "./creance";

@@ -2,7 +2,6 @@ import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import BandeauAbonnement from '@/components/BandeauAbonnement';
 import BandeauHorsLigne from '@/components/BandeauHorsLigne';
-import Verifconnecion from '@/components/verifconnecion';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 export const metadata = {
@@ -12,7 +11,7 @@ export const metadata = {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
-        <Verifconnecion>
+        <>
             <div className="d-flex flex-column min-vh-100" style={{ minHeight: '100vh' }}>
                 <div className="d-flex flex-column flex-lg-row flex-grow-1">
                     <Sidebar />
@@ -28,6 +27,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </div>
             </div>
-        </Verifconnecion>
+        </>
     );
 }

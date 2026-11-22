@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Form, Button, Row, Col, Card } from 'react-bootstrap';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import { ROLE_HOME, SERVICE_HOME } from '@/lib/permissions';
 
 const ORANGE = 'var(--ek-green)';
@@ -37,6 +38,7 @@ export default function ConnexionPage() {
   const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null);
   const [isLocked, setIsLocked] = useState(false);
   const router = useRouter();
+  const { actualiser, effacer } = useAuthUser();
 
   const handleConnexion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +70,9 @@ export default function ConnexionPage() {
         setMessage('✅ Connexion réussie ! Redirection...');
         setMessageType('success');
 
-        setTimeout(() => {
+        effacer();
+        await actualiser();
+        {
           const home = ROLE_HOME[profil?.type];
           if (home) {
             router.push(home);
@@ -76,7 +80,7 @@ export default function ConnexionPage() {
             const firstService = profil?.permissions?.services?.[0];
             router.push((firstService && SERVICE_HOME[firstService]) || '/dashboard');
           }
-        }, 1000);
+        }
       } else {
         setMessage('Erreur lors de la récupération du profil');
         setMessageType('danger');

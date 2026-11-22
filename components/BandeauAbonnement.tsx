@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useAuthUser } from "@/hooks/useAuthUser";
 
 interface Abo {
   planNom: string;
@@ -12,22 +12,14 @@ interface Abo {
 /**
  * Bandeau d'état d'abonnement affiché en haut du tableau de bord :
  * essai qui se termine (≤ 7 j), période de grâce, abonnement expiré.
- * Masqué pour le super-admin et les abonnements actifs loin de
- * l'échéance.
+ * Réservé à l'admin de l'entreprise — les opérateurs ne voient pas
+ * les informations de licence.
  */
 export default function BandeauAbonnement() {
-  const [abo, setAbo] = useState<Abo | null>(null);
+  const { entreprise, user } = useAuthUser();
+  const abo = entreprise?.abonnement;
 
-  useEffect(() => {
-    fetch("/api/me", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const a = data?.entreprise?.abonnement;
-        if (a) setAbo(a);
-      })
-      .catch(() => {});
-  }, []);
-
+  if (user?.type !== "admin") return null;
   if (!abo) return null;
 
   let variante: string | null = null;

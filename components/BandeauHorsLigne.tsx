@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "react-toastify";
-import { compterVentesHorsLigne, synchroniserVentesHorsLigne, ventesRejetees } from "@/lib/offlineQueue";
+import { compterVentesHorsLigne, synchroniserVentesHorsLigne, ventesRejetees, anciennesVentesHorsLigne } from "@/lib/offlineQueue";
+import { useAuthUser } from '@/hooks/useAuthUser';
 
 /**
  * Bandeau d'état réseau + ventes en attente de synchronisation.
@@ -10,6 +11,8 @@ import { compterVentesHorsLigne, synchroniserVentesHorsLigne, ventesRejetees } f
  * - Retour réseau : synchronisation automatique de la file locale.
  */
 export default function BandeauHorsLigne() {
+  const { user, actualiserNotifications } = useAuthUser();
+  const [anciennes, setAnciennes] = useState(0);
   const [enLigne, setEnLigne] = useState(true);
   const [enAttente, setEnAttente] = useState(0);
   const [nbRejets, setNbRejets] = useState(0);
@@ -19,12 +22,12 @@ export default function BandeauHorsLigne() {
   const syncRef = useRef(false);
 
   const synchroniser = useCallback(async () => {
-    if (syncRef.current || !navigator.onLine) return;
-    if (compterVentesHorsLigne() === 0) return;
+    if (!user?.entrepriseId || syncRef.current || !navigator.onLine) return;
+    if (compterVentesHorsLigne(user) === 0) return;
     syncRef.current = true;
     setSyncEnCours(true);
     try {
-      const res = await synchroniserVentesHorsLigne();
+      const res = await synchroniserVentesHorsLigne(user);
       if (res.envoyees > 0) {
         toast.success(`${res.envoyees} vente(s) hors-ligne synchronisée(s) au serveur`);
       }
@@ -32,22 +35,26 @@ export default function BandeauHorsLigne() {
         toast.error(`Vente hors-ligne rejetée (tracée côté serveur) : ${e.message}`);
       }
       setEnAttente(res.restantes);
-      setNbRejets(ventesRejetees().length);
+      setNbRejets(user?.entrepriseId ? ventesRejetees(user).length : 0);
+      actualiserNotifications();
     } finally {
       syncRef.current = false;
       setSyncEnCours(false);
     }
-  }, []);
+  }, [user?._id, user?.entrepriseId, actualiserNotifications]);
 
   useEffect(() => {
     const onOnline = () => { setEnLigne(true); synchroniser(); };
     const onOffline = () => setEnLigne(false);
-    const onChange = (e: Event) =>
-      setEnAttente((e as CustomEvent).detail ?? compterVentesHorsLigne());
+    const onChange = () => {
+      setEnAttente(user?.entrepriseId ? compterVentesHorsLigne(user) : 0);
+      setNbRejets(user?.entrepriseId ? ventesRejetees(user).length : 0);
+    };
 
+    setAnciennes(anciennesVentesHorsLigne());
     setEnLigne(navigator.onLine);
-    setEnAttente(compterVentesHorsLigne());
-    setNbRejets(ventesRejetees().length);
+    setEnAttente(user?.entrepriseId ? compterVentesHorsLigne(user) : 0);
+    setNbRejets(user?.entrepriseId ? ventesRejetees(user).length : 0);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     window.addEventListener("ek-offline-change", onChange);
@@ -60,10 +67,15 @@ export default function BandeauHorsLigne() {
     };
   }, [synchroniser]);
 
-  if (enLigne && enAttente === 0 && nbRejets === 0) return null;
+  if (!user?.entrepriseId) return null;
+  const afficher = (contenu: ReactNode) => <>
+    {anciennes > 0 && <div role="alert" className="alert alert-warning">Des ventes hors-ligne de l’ancienne version sont conservées sur cet appareil. Leur rattachement doit être vérifié par le responsable avant toute synchronisation.</div>}
+    {contenu}
+  </>;
+  if (enLigne && enAttente === 0 && nbRejets === 0) return afficher(null);
 
   if (enLigne && nbRejets > 0 && enAttente === 0) {
-    return (
+    return afficher(
       <div className="alert alert-danger py-2 px-3 mb-3 small" role="alert">
         <i className="bi bi-exclamation-octagon me-2"></i>
         <strong>{nbRejets} vente(s) hors-ligne refusée(s) par le serveur.</strong>
@@ -73,7 +85,7 @@ export default function BandeauHorsLigne() {
     );
   }
 
-  return (
+  return afficher(
     <div
       className={`alert py-2 px-3 mb-3 small d-flex align-items-center justify-content-between ${
         enLigne ? "alert-warning" : "alert-danger"

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Form, Button, Row, Col, Card } from 'react-bootstrap';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
 
 const ORANGE = 'var(--ek-green)';
 
@@ -34,6 +35,7 @@ const GARANTIES = [
  */
 export default function InscriptionPage() {
   const router = useRouter();
+  const { actualiser, effacer } = useAuthUser();
   const [form, setForm] = useState({
     nomSociete: '',
     nomCommercial: '',
@@ -87,7 +89,9 @@ export default function InscriptionPage() {
 
       setMessage('✅ Entreprise créée ! Redirection vers votre espace...');
       setMessageType('success');
-      setTimeout(() => router.push('/dashboard'), 1200);
+      effacer();
+      await actualiser();
+      router.replace('/dashboard');
     } catch (error: any) {
       const msg = error.response?.data?.message;
       setMessage(msg || "Erreur lors de la création du compte.");

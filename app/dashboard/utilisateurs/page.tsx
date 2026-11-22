@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, Form, Modal, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useAuthUser } from '@/hooks/useAuthUser';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import PermissionsModal, { type PermissionsValue } from '@/components/PermissionsModal';
 import { ROLE_LABELS, TENANT_ROLES } from '@/lib/permissions';
@@ -39,30 +41,20 @@ function UtilisateursInner() {
   const [kiosquesSel, setKiosquesSel] = useState<string[]>([]);
   const [perms, setPerms] = useState<PermissionsValue>({ customized: false, services: [], actions: [] });
   const [saving, setSaving] = useState(false);
-  const [monId, setMonId] = useState('');
+  const { user, actualiser } = useAuthUser();
+  const monId = user?._id || '';
+  const lire = useLecture();
 
   const charger = useCallback(() => {
     setChargement(true);
-    Promise.all([
-      axios.get('/api/utilisateurs', { withCredentials: true }),
-      axios.get('/api/kiosques', { withCredentials: true }),
-      axios.get('/api/profils', { withCredentials: true }),
-    ])
-      .then(([u, k, p]) => {
-        setUtilisateurs(u.data?.utilisateurs || []);
-        setKiosques(k.data?.kiosques || []);
-        setProfils(p.data?.profils || []);
-      })
-      .catch(() => toast.error('Erreur de chargement'))
-      .finally(() => setChargement(false));
-  }, []);
+    void lire('/api/utilisateurs', (data) => setUtilisateurs(data?.utilisateurs || []),
+      () => toast.error('Erreur de chargement des utilisateurs'), () => setChargement(false));
+  }, [lire]);
 
   useEffect(() => {
     charger();
-    fetch('/api/me', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setMonId(data?.user?._id || ''))
-      .catch(() => {});
+    void lire('/api/kiosques', (data) => setKiosques(data?.kiosques || []), () => toast.error('Kiosques indisponibles'));
+    void lire('/api/profils', (data) => setProfils(data?.profils || []), () => toast.error('Profils indisponibles'));
   }, [charger]);
 
   const ouvrir = (u?: Utilisateur) => {
@@ -116,6 +108,7 @@ function UtilisateursInner() {
       }
       setShowModal(false);
       charger();
+      if (edition?._id === monId) void actualiser();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement");
     } finally {
@@ -150,7 +143,8 @@ function UtilisateursInner() {
 
       <Card>
         <Card.Body className="p-0">
-          <Table responsive hover className="mb-0 align-middle">
+          <Table responsive hover className="mb-0 align-middle" aria-busy={chargement}>
+            {chargement && <caption className="caption-top small">Actualisation…</caption>}
             <thead className="table-light">
               <tr>
                 <th>Nom</th>
@@ -163,7 +157,7 @@ function UtilisateursInner() {
               </tr>
             </thead>
             <tbody>
-              {chargement ? (
+              {chargement && utilisateurs.length === 0 ? (
                 <tr><td colSpan={7} className="text-center p-4">Chargement...</td></tr>
               ) : utilisateurs.length === 0 ? (
                 <tr><td colSpan={7} className="text-center p-4 text-muted">Aucun utilisateur.</td></tr>

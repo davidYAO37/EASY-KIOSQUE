@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuthUser } from '@/hooks/useAuthUser';
 
 const ORANGE = 'var(--ek-green)';
 const MARINE = '#14213d';
@@ -102,6 +103,7 @@ function Pastille({ icon, taille = 44 }: { icon: string; taille?: number }) {
  */
 export default function Home() {
   const router = useRouter();
+  const { user, loading } = useAuthUser();
   const [tarifs, setTarifs] = useState<Tarif[]>(TARIFS_DEFAUT);
 
   // Tarifs synchronisés avec les plans saisis par le super-admin
@@ -124,10 +126,8 @@ export default function Home() {
 
   // Un utilisateur déjà connecté est redirigé vers son espace
   useEffect(() => {
-    fetch('/api/me', { credentials: 'include' })
-      .then((res) => { if (res.ok) router.replace('/dashboard'); })
-      .catch(() => {});
-  }, [router]);
+    if (!loading && user) router.replace('/dashboard');
+  }, [router, user, loading]);
 
   return (
     <div className="ek-home" style={{ margin: '-1rem', background: '#fff', color: MARINE }}>

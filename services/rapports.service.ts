@@ -52,16 +52,18 @@ function plage(du?: string, au?: string) {
 async function perimetre(user: CurrentUser, kiosqueId?: string) {
   const kiosques = await kiosquesAutorises(user);
   let ids = kiosques.map((k) => k._id);
-  if (kiosqueId && Types.ObjectId.isValid(kiosqueId)) {
-    const k = oid(kiosqueId);
-    ids = ids.filter((id) => id.equals(k));
+  if (kiosqueId) {
+    if (!Types.ObjectId.isValid(kiosqueId) || !ids.some((id) => id.equals(oid(kiosqueId)))) {
+      throw Object.assign(new Error('Kiosque introuvable ou non autorisé'), { status: 404, code: 'KIOSQUE_INVALIDE' });
+    }
+    ids = ids.filter((id) => id.equals(oid(kiosqueId)));
   }
   const map = new Map(kiosques.map((k) => [String(k._id), k]));
   return { ids, map };
 }
 
 async function nomsVendeurs(eid: Types.ObjectId, ids: Types.ObjectId[]) {
-  const users = await User.find({ _id: { $in: ids } }).select("nom prenom name").lean();
+  const users = await User.find({ entrepriseId: eid, _id: { $in: ids } }).select("nom prenom name").lean();
   const m = new Map(
     users.map((u) => [String(u._id), [u.prenom, u.nom].filter(Boolean).join(" ").trim() || u.name || "Utilisateur"])
   );
@@ -80,7 +82,7 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
   const jour = { $gte: debutJour(), $lte: finJour() };
 
   // Ventes du jour (validées)
-  const [vJour] = await Vente.aggregate([
+  const vJourRequete = Vente.aggregate([
     { $match: { ...filtreBase, statutVente: "validee", dateVente: jour } },
     {
       $group: {
@@ -95,7 +97,7 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
   // Encaissements du jour par mode de paiement (ventes + remboursements
   // de créances ; hors paiements annulés). Vendeur/caissier : ses
   // encaissements seulement (`recuPar`).
-  const parModeRaw = await Paiement.aggregate([
+  const parModeRequete = Paiement.aggregate([
     {
       $match: {
         entrepriseId: eid,
@@ -111,32 +113,32 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
   ]);
 
   // Remboursements de créances encaissés aujourd'hui
-  const [rmbJour] = controleur
-    ? await Remboursement.aggregate([
+  const rmbRequete = controleur
+    ? Remboursement.aggregate([
         { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, datePaiement: jour } },
         { $group: { _id: null, total: { $sum: "$montantTotal" } } },
       ])
     : [null];
 
   // Dépenses du jour (contrôleurs uniquement)
-  const [depJour] = controleur
-    ? await Depense.aggregate([
+  const depRequete = controleur
+    ? Depense.aggregate([
         { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, statut: "validee", dateDepense: jour } },
         { $group: { _id: null, total: { $sum: "$montant" }, nb: { $sum: 1 } } },
       ])
     : [null];
 
   // Créances restantes (contrôleurs)
-  const [creances] = controleur
-    ? await Creance.aggregate([
+  const creancesRequete = controleur
+    ? Creance.aggregate([
         { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, solde: { $gt: 0 }, statut: { $ne: "annulee" } } },
         { $group: { _id: null, du: { $sum: "$solde" }, nb: { $sum: 1 } } },
       ])
     : [null];
 
   // Alertes exploitation (contrôleurs)
-  const [remisesAttente, caissesOuvertes] = controleur
-    ? await Promise.all([
+  const alertesRequete = controleur
+    ? Promise.all([
         Remise.aggregate([
           { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, statut: "declaree" } },
           { $group: { _id: null, total: { $sum: "$montant" }, nb: { $sum: 1 } } },
@@ -151,7 +153,7 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
 
   // Série 7 jours : CA par jour
   const il7 = debutJour(new Date(Date.now() - 6 * 86400000));
-  const serieRaw = await Vente.aggregate([
+  const serieRequete = Vente.aggregate([
     { $match: { ...filtreBase, statutVente: "validee", dateVente: { $gte: il7 } } },
     {
       $group: {
@@ -162,6 +164,10 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
     },
     { $sort: { _id: 1 } },
   ]);
+  const [[vJour], parModeRaw, [rmbJour], [depJour], [creances], alertes, serieRaw] = await Promise.all([
+    vJourRequete, parModeRequete, rmbRequete, depRequete, creancesRequete, alertesRequete, serieRequete,
+  ]);
+  const [remisesAttente, caissesOuvertes] = alertes;
   const serieMap = new Map(serieRaw.map((s) => [s._id, s]));
   const serie7j: { date: string; ca: number; nb: number }[] = [];
   for (let i = 6; i >= 0; i--) {
@@ -174,13 +180,15 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
   // Répartition du jour par kiosque (contrôleurs)
   let parKiosque: any[] = [];
   if (controleur) {
-    const agg = await Vente.aggregate([
-      { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, statutVente: "validee", dateVente: jour } },
-      { $group: { _id: "$kiosqueId", ca: { $sum: "$montantTotal" }, nb: { $sum: 1 } } },
-    ]);
-    const depParKiosque = await Depense.aggregate([
-      { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, statut: "validee", dateDepense: jour } },
-      { $group: { _id: "$kiosqueId", total: { $sum: "$montant" } } },
+    const [agg, depParKiosque] = await Promise.all([
+      Vente.aggregate([
+        { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, statutVente: "validee", dateVente: jour } },
+        { $group: { _id: "$kiosqueId", ca: { $sum: "$montantTotal" }, nb: { $sum: 1 } } },
+      ]),
+      Depense.aggregate([
+        { $match: { entrepriseId: eid, kiosqueId: { $in: ids }, statut: "validee", dateDepense: jour } },
+        { $group: { _id: "$kiosqueId", total: { $sum: "$montant" } } },
+      ]),
     ]);
     const depMap = new Map(depParKiosque.map((d) => [String(d._id), d.total]));
     parKiosque = ids.map((id) => {
@@ -196,26 +204,12 @@ export async function tableauDeBord(user: CurrentUser, kiosqueId?: string) {
   }
 
   // Top produits du jour
-  const topRaw = await LigneVente.aggregate([
-    {
-      $lookup: {
-        from: "ventes",
-        localField: "venteId",
-        foreignField: "_id",
-        as: "v",
-      },
-    },
-    { $unwind: "$v" },
-    {
-      $match: {
-        entrepriseId: eid,
-        "v.kiosqueId": { $in: ids },
-        "v.statutVente": "validee",
-        "v.dateVente": jour,
-        ...(controleur ? {} : { "v.vendeurId": oid(user._id) }),
-      },
-    },
-    { $group: { _id: "$designation", quantite: { $sum: "$quantite" }, montant: { $sum: "$montant" } } },
+  const topRaw = await Vente.aggregate([
+    { $match: { ...filtreBase, statutVente: 'validee', dateVente: jour } },
+    { $lookup: { from: 'lignesventes', localField: '_id', foreignField: 'venteId', as: 'lignes' } },
+    { $unwind: '$lignes' },
+    { $match: { 'lignes.entrepriseId': eid, 'lignes.kiosqueId': { $in: ids } } },
+    { $group: { _id: '$lignes.designation', quantite: { $sum: '$lignes.quantite' }, montant: { $sum: '$lignes.montant' } } },
     { $sort: { quantite: -1 } },
     { $limit: 5 },
   ]);
@@ -319,24 +313,15 @@ export async function rapportVentes(
     ]),
   ]);
 
-  const topProduits = await LigneVente.aggregate([
-    { $lookup: { from: "ventes", localField: "venteId", foreignField: "_id", as: "v" } },
-    { $unwind: "$v" },
-    {
-      $match: {
-        entrepriseId: eid,
-        "v.kiosqueId": { $in: ids },
-        "v.statutVente": "validee",
-        "v.dateVente": plage(f.du, f.au),
-      },
-    },
-    {
-      $group: {
-        _id: { designation: "$designation", code: "$codeProduit" },
-        quantite: { $sum: "$quantite" },
-        montant: { $sum: "$montant" },
-      },
-    },
+  const topProduits = await Vente.aggregate([
+    { $match: match },
+    { $lookup: { from: 'lignesventes', localField: '_id', foreignField: 'venteId', as: 'lignes' } },
+    { $unwind: '$lignes' },
+    { $match: { 'lignes.entrepriseId': eid, 'lignes.kiosqueId': { $in: ids } } },
+    { $group: {
+      _id: { designation: '$lignes.designation', code: '$lignes.code' },
+      quantite: { $sum: '$lignes.quantite' }, montant: { $sum: '$lignes.montant' },
+    } },
     { $sort: { montant: -1 } },
     { $limit: 10 },
   ]);

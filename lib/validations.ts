@@ -40,6 +40,7 @@ export const entrepriseUpdateSchema = z.object({
       impressionAuto: z.boolean().optional(),
     })
     .optional(),
+  delaiDemandeAnnulationH: z.number().int().min(0).max(720).optional(),
 });
 
 export const kiosqueSchema = z.object({

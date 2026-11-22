@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, Col, Form, Modal, Offcanvas, Row, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { fmtDate } from '@/lib/format';
 
@@ -71,6 +72,7 @@ const BADGE_ABO: Record<string, { bg: string; libelle: string }> = {
  * gestion des plans. Aucune donnée métier des tenants n'est affichée.
  */
 function AdminEntreprisesInner() {
+  const lire = useLecture();
   const [entreprises, setEntreprises] = useState<EntrepriseRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -97,21 +99,15 @@ function AdminEntreprisesInner() {
 
   const charger = useCallback(() => {
     setChargement(true);
-    Promise.all([
-      axios.get('/api/entreprises', { withCredentials: true }),
-      axios.get('/api/admin/stats', { withCredentials: true }),
-      axios.get('/api/admin/plans', { withCredentials: true }),
-    ])
-      .then(([r1, r2, r3]) => {
-        setEntreprises(r1.data?.entreprises || []);
-        setStats(r2.data || null);
-        setPlans(r3.data?.plans || []);
-      })
-      .catch(() => toast.error('Erreur de chargement'))
-      .finally(() => setChargement(false));
-  }, []);
+    void lire('/api/entreprises', (data) => setEntreprises(data?.entreprises || []),
+      () => toast.error('Entreprises indisponibles'), () => setChargement(false));
+    void lire('/api/admin/stats', setStats, () => toast.error('Statistiques indisponibles'));
+  }, [lire]);
+  const chargerPlans = useCallback(() => {
+    void lire('/api/admin/plans', (data) => setPlans(data?.plans || []), () => toast.error('Plans indisponibles'));
+  }, [lire]);
 
-  useEffect(() => { charger(); }, [charger]);
+  useEffect(() => { charger(); chargerPlans(); }, [charger, chargerPlans]);
 
   const basculer = async (e: EntrepriseRow) => {
     const statut = e.statut === 'actif' ? 'suspendu' : 'actif';
@@ -181,6 +177,7 @@ function AdminEntreprisesInner() {
         toast.success('Plan créé');
       }
       setEditPlan(null);
+      chargerPlans();
       charger();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Erreur');
@@ -254,7 +251,8 @@ function AdminEntreprisesInner() {
 
       <Card>
         <Card.Body className="p-0">
-          <Table responsive hover className="mb-0 align-middle">
+          <Table responsive hover className="mb-0 align-middle" aria-busy={chargement}>
+            {chargement && <caption className="caption-top small">Actualisation…</caption>}
             <thead className="table-light">
               <tr>
                 <th>Entreprise</th>
@@ -267,7 +265,7 @@ function AdminEntreprisesInner() {
               </tr>
             </thead>
             <tbody>
-              {chargement ? (
+              {chargement && entreprises.length === 0 ? (
                 <tr><td colSpan={7} className="text-center p-4">Chargement...</td></tr>
               ) : entreprises.length === 0 ? (
                 <tr><td colSpan={7} className="text-center p-4 text-muted">Aucune entreprise inscrite.</td></tr>

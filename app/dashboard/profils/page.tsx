@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, Form, Modal, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useLecture } from '@/hooks/useLecture';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import RoleGuard from '@/components/RoleGuard';
 import PermissionsModal, { type PermissionsValue } from '@/components/PermissionsModal';
 import { ROLE_LABELS, TENANT_ROLES } from '@/lib/permissions';
@@ -18,6 +20,8 @@ interface Profil {
 }
 
 function ProfilsInner() {
+  const lire = useLecture();
+  const { actualiser } = useAuthUser();
   const [profils, setProfils] = useState<Profil[]>([]);
   const [chargement, setChargement] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -30,12 +34,9 @@ function ProfilsInner() {
 
   const charger = useCallback(() => {
     setChargement(true);
-    axios
-      .get('/api/profils', { withCredentials: true })
-      .then((res) => setProfils(res.data?.profils || []))
-      .catch(() => toast.error('Erreur de chargement des profils'))
-      .finally(() => setChargement(false));
-  }, []);
+    void lire('/api/profils', (data) => setProfils(data?.profils || []),
+      () => toast.error('Erreur de chargement des profils'), () => setChargement(false));
+  }, [lire]);
 
   useEffect(() => { charger(); }, [charger]);
 
@@ -65,6 +66,7 @@ function ProfilsInner() {
       }
       setShowModal(false);
       charger();
+      void actualiser();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement");
     } finally {
@@ -78,6 +80,7 @@ function ProfilsInner() {
       await axios.delete(`/api/profils/${p._id}`, { withCredentials: true });
       toast.success('Profil supprimé');
       charger();
+      void actualiser();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Erreur');
     }
@@ -94,7 +97,8 @@ function ProfilsInner() {
 
       <Card>
         <Card.Body className="p-0">
-          <Table responsive hover className="mb-0 align-middle">
+          <Table responsive hover className="mb-0 align-middle" aria-busy={chargement}>
+            {chargement && <caption className="caption-top small">Actualisation…</caption>}
             <thead className="table-light">
               <tr>
                 <th>Profil</th>
@@ -104,7 +108,7 @@ function ProfilsInner() {
               </tr>
             </thead>
             <tbody>
-              {chargement ? (
+              {chargement && profils.length === 0 ? (
                 <tr><td colSpan={4} className="text-center p-4">Chargement...</td></tr>
               ) : profils.length === 0 ? (
                 <tr><td colSpan={4} className="text-center p-4 text-muted">Aucun profil.</td></tr>

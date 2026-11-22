@@ -7,6 +7,7 @@ import {
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useActualisation, useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { useKiosque } from '@/hooks/useKiosque';
@@ -44,8 +45,11 @@ function fmtHeure(d?: string) {
  *   annulation des remises, historique des sessions et mouvements.
  */
 function CaisseInner() {
-  const { aAction } = useAuthUser();
+  const { user, aAction, actualiserNotifications } = useAuthUser();
+  const [kiosqueCharge, setKiosqueCharge] = useState('');
+  const [erreurChargement, setErreurChargement] = useState(false);
   const { kiosqueId, kiosques, kiosque, changerKiosque } = useKiosque();
+  const lire = useLecture(kiosqueId);
   const peutOuvrir = aAction('ouvrir_caisse');
   const peutCloturer = aAction('cloturer_caisse');
   const peutDeclarer = aAction('declarer_remise');
@@ -81,41 +85,61 @@ function CaisseInner() {
   const [nbHorsLigne, setNbHorsLigne] = useState(0);
   const cleRemise = useRef<string>(crypto.randomUUID());
 
-  const charger = useCallback(async () => {
+  const chargerRemises = useCallback(() => {
+    if (!kiosqueId) return;
+    void lire(`/api/remises?kiosqueId=${kiosqueId}&limit=50`, (data) => setRemises(data?.items || []),
+      () => toast.error('Impossible d’actualiser les remises'));
+  }, [kiosqueId, lire]);
+  const chargerHistorique = useCallback(() => {
+    if (!kiosqueId || !controleur) return;
+    void lire(`/api/caisses?kiosqueId=${kiosqueId}&limit=20`, (data) => setHistorique(data?.items || []),
+      () => toast.error('Impossible d’actualiser l’historique des caisses'));
+  }, [kiosqueId, controleur, lire]);
+  const chargerSession = useCallback(() => {
     if (!kiosqueId) { setSession(null); setChargement(false); return; }
     setChargement(true);
-    try {
-      const [rS, rR] = await Promise.all([
-        axios.get(`/api/caisses/actuelle?kiosqueId=${kiosqueId}`, { withCredentials: true }),
-        axios.get(`/api/remises?kiosqueId=${kiosqueId}&limit=50`, { withCredentials: true }),
-      ]);
-      const s: SessionCaisseDTO | null = rS.data?.session || null;
+    setErreurChargement(false);
+    void lire(`/api/caisses/actuelle?kiosqueId=${kiosqueId}`, (data) => {
+      const s: SessionCaisseDTO | null = data?.session || null;
       setSession(s);
-      setRemises(rR.data?.items || []);
+      setKiosqueCharge(kiosqueId);
       if (s && controleur) {
-        const rM = await axios.get(`/api/caisses/${s._id}/mouvements`, { withCredentials: true });
-        setMouvements(rM.data?.mouvements || []);
-      } else {
-        setMouvements([]);
-      }
-      if (controleur) {
-        const rH = await axios.get(`/api/caisses?kiosqueId=${kiosqueId}&limit=20`, { withCredentials: true });
-        setHistorique(rH.data?.items || []);
-      }
-    } catch {
-      setSession(null);
-    } finally {
-      setChargement(false);
-    }
-  }, [kiosqueId, controleur]);
+        void lire(`/api/caisses/${s._id}/mouvements`, (resultat) => setMouvements(resultat?.mouvements || []),
+          () => toast.error('Mouvements indisponibles'), () => {}, 'mouvements');
+      } else setMouvements([]);
+    }, () => { setErreurChargement(true); toast.error('Impossible de vérifier la caisse'); }, () => setChargement(false));
+  }, [kiosqueId, controleur, lire]);
+  const charger = useCallback(() => {
+    chargerSession(); chargerRemises();
+    if (onglet === 'sessions') chargerHistorique();
+    actualiserNotifications();
+  }, [chargerSession, chargerRemises, chargerHistorique, onglet, actualiserNotifications]);
 
-  useEffect(() => { charger(); }, [charger]);
+  useEffect(() => {
+    setSession(null); setMouvements([]); setRemises([]); setHistorique([]); setKiosqueCharge('');
+    chargerSession(); chargerRemises();
+  }, [chargerSession, chargerRemises]);
+  useActualisation(charger);
+  useEffect(() => { if (onglet === 'sessions') chargerHistorique(); }, [onglet, chargerHistorique]);
+  useEffect(() => {
+    const proteger = (e: Event) => {
+      if (enCours || ((showOuverture || showPoint || showRejet || showCloture || showRemise || remiseAAnnuler) &&
+        !window.confirm('Une saisie de caisse est en cours. L’abandonner et changer de kiosque ?'))) e.preventDefault();
+    };
+    window.addEventListener('ek-kiosque-avant-changement', proteger);
+    return () => window.removeEventListener('ek-kiosque-avant-changement', proteger);
+  }, [enCours, showOuverture, showPoint, showRejet, showCloture, showRemise, remiseAAnnuler]);
+  useEffect(() => {
+    setShowOuverture(false); setShowPoint(false); setShowRejet(false); setShowCloture(false); setShowRemise(false);
+    setRemiseAAnnuler(null); setSessionDetail(null); setFond(''); setCompte(''); setCommentaire('');
+    setMontantRemise(''); setNoteRemise(''); setMotifRejet(''); setMotifAnnulation('');
+  }, [kiosqueId]);
 
   // Compte des ventes hors-ligne du kiosque courant, mis à jour à chaque
   // changement de file et au retour sur la page.
   useEffect(() => {
     const maj = () =>
-      setNbHorsLigne(kiosqueId ? ventesHorsLignePourKiosque(kiosqueId).length : 0);
+      setNbHorsLigne(kiosqueId ? ventesHorsLignePourKiosque(kiosqueId, user!).length : 0);
     maj();
     window.addEventListener('ek-offline-change', maj);
     window.addEventListener('focus', maj);
@@ -128,7 +152,7 @@ function CaisseInner() {
   const synchroniserFile = async () => {
     setEnCours(true);
     try {
-      const res = await synchroniserVentesHorsLigne();
+      const res = await synchroniserVentesHorsLigne(user!);
       if (res.envoyees > 0) {
         toast.success(`${res.envoyees} vente(s) synchronisée(s) — soldes mis à jour`);
       }
@@ -206,7 +230,8 @@ function CaisseInner() {
       toast.success('Remise déclarée — en attente de confirmation');
       setShowRemise(false); setMontantRemise(''); setNoteRemise('');
       cleRemise.current = crypto.randomUUID();
-      charger();
+      chargerRemises();
+      actualiserNotifications();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erreur');
     } finally { setEnCours(false); }
@@ -275,6 +300,7 @@ function CaisseInner() {
           size="sm" style={{ maxWidth: 260 }} value={kiosqueId}
           onChange={(e) => changerKiosque(e.target.value)}
         >
+          <option value="">Sélectionner un kiosque</option>
           {kiosques.map((k) => (
             <option key={k._id} value={k._id}>{k.code} — {k.designation}</option>
           ))}
@@ -283,7 +309,9 @@ function CaisseInner() {
 
       {!kiosqueId ? (
         <Alert variant="info">Sélectionnez un kiosque pour gérer sa caisse.</Alert>
-      ) : chargement ? (
+      ) : erreurChargement ? (
+        <Alert variant="warning">État de caisse indisponible. <Button size="sm" onClick={charger}>Réessayer</Button></Alert>
+      ) : chargement && kiosqueCharge !== kiosqueId ? (
         <div className="text-center py-5"><Spinner animation="border" variant="success" /></div>
       ) : (
         <>

@@ -7,6 +7,7 @@ import {
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useLecture, useRecherche } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { useKiosque } from '@/hooks/useKiosque';
@@ -42,6 +43,8 @@ function DepensesInner() {
   const [fKiosque, setFKiosque] = useState('');
   const [fCategorie, setFCategorie] = useState('');
   const [q, setQ] = useState('');
+  const qRecherche = useRecherche(q);
+  const lire = useLecture();
   const [du, setDu] = useState('');
   const [au, setAu] = useState('');
   const [page, setPage] = useState(1);
@@ -82,24 +85,22 @@ function DepensesInner() {
     if (fStatut) params.set('statut', fStatut);
     if (fKiosque) params.set('kiosqueId', fKiosque);
     if (fCategorie) params.set('categorieDepenseId', fCategorie);
-    if (q) params.set('q', q);
+    if (qRecherche) params.set('q', qRecherche);
     if (du) params.set('du', du);
     if (au) params.set('au', au);
-    axios.get<ListeDepenses>(`/api/depenses?${params}`, { withCredentials: true })
-      .then((res) => setData(res.data))
-      .catch((e) => {
-        if (e?.response?.status !== 403) toast.error('Erreur de chargement des dépenses');
-      })
-      .finally(() => setChargement(false));
-  }, [page, fStatut, fKiosque, fCategorie, q, du, au]);
+    void lire<ListeDepenses>(`/api/depenses?${params}`, setData, (e) => {
+      if (e?.response?.status !== 403) toast.error('Erreur de chargement des dépenses');
+    }, () => setChargement(false));
+  }, [page, fStatut, fKiosque, fCategorie, qRecherche, du, au, lire]);
 
   const chargerCats = useCallback(() => {
     setChargementCats(true);
-    axios.get('/api/depenses/categories?tout=1', { withCredentials: true })
-      .then((res) => setCatsAll(res.data?.categories || []))
-      .catch(() => toast.error('Erreur de chargement des catégories'))
-      .finally(() => setChargementCats(false));
-  }, []);
+    void lire('/api/depenses/categories?tout=1', (data) => {
+      const liste: CategorieDepenseDTO[] = data?.categories || [];
+      setCatsAll(liste);
+      setCategories(liste.filter((c) => c.statut !== 'inactif'));
+    }, () => toast.error('Erreur de chargement des catégories'), () => setChargementCats(false));
+  }, [lire]);
 
   useEffect(() => { if (onglet === 'depenses') charger(); }, [charger, onglet]);
   useEffect(() => { if (onglet === 'categories' && peutParametrer) chargerCats(); }, [chargerCats, onglet, peutParametrer]);
@@ -170,8 +171,6 @@ function DepensesInner() {
       }
       setShowCat(false);
       chargerCats();
-      axios.get('/api/depenses/categories', { withCredentials: true })
-        .then((res) => setCategories(res.data?.categories || [])).catch(() => {});
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erreur');
     } finally {
@@ -185,8 +184,6 @@ function DepensesInner() {
         statut: c.statut === 'actif' ? 'inactif' : 'actif',
       }, { withCredentials: true });
       chargerCats();
-      axios.get('/api/depenses/categories', { withCredentials: true })
-        .then((res) => setCategories(res.data?.categories || [])).catch(() => {});
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erreur');
     }
@@ -254,13 +251,13 @@ function DepensesInner() {
                 </tr>
               </thead>
               <tbody>
-                {chargement && (
+                {chargement && data.items.length === 0 && (
                   <tr><td colSpan={9} className="text-center py-4"><Spinner animation="border" size="sm" /></td></tr>
                 )}
                 {!chargement && data.items.length === 0 && (
                   <tr><td colSpan={9} className="text-center py-4 text-muted">Aucune dépense</td></tr>
                 )}
-                {!chargement && data.items.map((d) => (
+                {data.items.map((d) => (
                   <tr key={d._id} className={d.statut === 'annulee' ? 'text-muted' : ''}>
                     <td className="small">{d.numero}</td>
                     <td className="small">{fmtDate(d.dateDepense)}</td>
@@ -321,7 +318,7 @@ function DepensesInner() {
               {chargementCats && (
                 <tr><td colSpan={4} className="text-center py-4"><Spinner animation="border" size="sm" /></td></tr>
               )}
-              {!chargementCats && catsAll.map((c) => (
+              {catsAll.map((c) => (
                 <tr key={c._id}>
                   <td className="small">{c.code}</td>
                   <td>{c.designation}</td>

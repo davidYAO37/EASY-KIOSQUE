@@ -42,6 +42,8 @@ export interface JWTPayload {
   entrepriseId?: string | null;
   /** Incrémenté au changement de mot de passe : révoque les anciens jetons. */
   tv?: number;
+  /** Horodatage d'émission du jeton (posé par jsonwebtoken) = heure de connexion. */
+  iat?: number;
 }
 
 export function signToken(payload: JWTPayload): string {
@@ -74,6 +76,8 @@ export interface CurrentUser {
   /** Kiosques auxquels l'utilisateur est affecté (vide = tous). */
   kiosqueIds: string[];
   permissions: ResolvedPermissions;
+  /** Date/heure de connexion de la session courante (émission du JWT). */
+  connecteDepuis?: string | null;
 }
 
 export async function getCurrentUser(req?: NextRequest): Promise<CurrentUser | null> {
@@ -102,6 +106,7 @@ export async function getCurrentUser(req?: NextRequest): Promise<CurrentUser | n
     entrepriseId: user.entrepriseId ? user.entrepriseId.toString() : null,
     kiosqueIds: (user.kiosqueIds || []).map((k: any) => k.toString()),
     permissions: getUserPermissions(user),
+    connecteDepuis: payload.iat ? new Date(payload.iat * 1000).toISOString() : null,
   };
 }
 
