@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Badge, Button, Card, Col, Form, InputGroup, Modal, Row, Spinner, Table,
+  Badge, Button, ButtonGroup, Card, Col, Form, InputGroup, Modal, Row, Spinner, Table,
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -39,8 +39,54 @@ function prixApplique(p: ProduitDTO, kiosqueId: string): number {
 
 function PosInner() {
   const { kiosqueId, kiosques, loading: chargKiosques } = useKiosque();
-  const { user, aAction, actualiserNotifications } = useAuthUser();
+  const { user, aAction, entreprise, actualiserNotifications } = useAuthUser();
   const lire = useLecture(kiosqueId);
+
+  // Niveaux de stock du kiosque courant (uniquement si l'entreprise suit
+  // le stock) — affichés sur les cartes produits REVENTE.
+  const [stockParProduit, setStockParProduit] = useState<Record<string, number>>({});
+  const stockActif = !!entreprise?.stock?.actif;
+
+  // Mode d'affichage des produits : grille compacte, liste dense ou fiches
+  // détaillées — préférence mémorisée par entreprise + utilisateur.
+  const [affichage, setAffichage] = useState<'grille' | 'liste' | 'detail'>('grille');
+  const cleAffichage = user ? `ek_pos_affichage:${user.entrepriseId}:${user._id}` : null;
+  useEffect(() => {
+    if (!cleAffichage) return;
+    const v = localStorage.getItem(cleAffichage);
+    if (v === 'liste' || v === 'detail') setAffichage(v);
+  }, [cleAffichage]);
+  const changerAffichage = (v: 'grille' | 'liste' | 'detail') => {
+    setAffichage(v);
+    if (cleAffichage) localStorage.setItem(cleAffichage, v);
+  };
+
+  // Indicateur de stock commun aux trois affichages (REVENTE seulement)
+  const indicateurStock = (p: ProduitDTO, compact = false) => {
+    if (!stockActif || p.typeProduit !== 'REVENTE') return null;
+    const n = stockParProduit[p._id] ?? 0;
+    const cls = n <= 0 ? 'text-danger fw-semibold'
+      : (p.seuilAlerte != null && n <= p.seuilAlerte) ? 'text-warning fw-semibold'
+      : 'text-muted';
+    return (
+      <span style={{ fontSize: '0.7rem' }} className={cls}>
+        {compact ? `Stk ${n}` : `Stock : ${n}`}
+      </span>
+    );
+  };
+
+  useEffect(() => {
+    setStockParProduit({});
+    if (!stockActif || !kiosqueId) return;
+    axios
+      .get(`/api/stock?kiosqueId=${kiosqueId}`, { withCredentials: true })
+      .then((res) => {
+        const m: Record<string, number> = {};
+        (res.data?.niveaux || []).forEach((n: any) => { m[n.produitId] = n.quantite; });
+        setStockParProduit(m);
+      })
+      .catch(() => {});
+  }, [stockActif, kiosqueId]);
 
   // Catalogue
   const [categories, setCategories] = useState<CategorieDTO[]>([]);
@@ -89,7 +135,7 @@ function PosInner() {
   const imprimer = useReactToPrint({ contentRef: ticketRef });
   const imprimerAuto = useReactToPrint({ contentRef: ticketAutoRef });
   useEffect(() => {
-    if (!ticketAuto) return;
+    if (!ticketAuto || ticketAuto.imprimable === false) return;
     const id = window.setTimeout(() => imprimerAuto(), 250);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,6 +199,32 @@ function PosInner() {
       }, 0),
     [paiements]
   );
+
+  /**
+   * Scan code-barres : un lecteur agit comme un clavier et termine par
+   * Entrée — si la saisie correspond EXACTEMENT à un code-barres connu,
+   * le produit est ajouté au panier directement (sans clic sur la carte).
+   */
+  const scannerCodeBarre = async () => {
+    const s = q.trim();
+    if (!s) return;
+    try {
+      const res = await axios.get(`/api/produits?codeBarre=${encodeURIComponent(s)}&limit=2`, {
+        withCredentials: true,
+      });
+      const trouves = res.data?.produits || [];
+      if (trouves.length === 1) {
+        ajouter(trouves[0]);
+        setQ('');
+      } else if (trouves.length === 0) {
+        toast.warning(`Aucun produit pour le code-barres « ${s} ».`);
+      } else {
+        toast.warning(`Le code-barres « ${s} » est attribué à plusieurs produits — précisez la recherche.`);
+      }
+    } catch {
+      toast.error('Recherche par code-barres impossible.');
+    }
+  };
 
   const ajouter = (p: ProduitDTO) => {
     setPanier((prev) => {
@@ -393,18 +465,31 @@ function PosInner() {
         <Col lg={7} xl={8}>
           <Card className="h-100">
             <Card.Body>
-              <Row className="g-2 mb-3">
-                <Col md={6}>
+              {/* sticky : recherche/filtres toujours visibles en scrollant la liste */}
+              <Row
+                className="g-2 mb-3"
+                style={{
+                  position: 'sticky',
+                  top: '0.75rem',
+                  zIndex: 20,
+                  background: 'var(--bs-card-bg, #fff)',
+                  paddingTop: '0.5rem',
+                  paddingBottom: '0.5rem',
+                  borderBottom: '1px solid var(--bs-border-color, #dee2e6)',
+                }}
+              >
+                <Col md={5}>
                   <InputGroup size="sm">
                     <InputGroup.Text><i className="bi bi-search"></i></InputGroup.Text>
                     <Form.Control
-                      placeholder="Rechercher un produit…"
+                      placeholder="Rechercher ou scanner un code-barres…"
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void scannerCodeBarre(); } }}
                     />
                   </InputGroup>
                 </Col>
-                <Col md={6}>
+                <Col md={4}>
                   <Form.Select
                     size="sm"
                     value={categorieId}
@@ -416,6 +501,31 @@ function PosInner() {
                     ))}
                   </Form.Select>
                 </Col>
+                <Col md={3} className="text-end">
+                  <ButtonGroup size="sm">
+                    <Button
+                      variant={affichage === 'grille' ? 'primary' : 'outline-secondary'}
+                      title="Grille"
+                      onClick={() => changerAffichage('grille')}
+                    >
+                      <i className="bi bi-grid-3x2-gap"></i>
+                    </Button>
+                    <Button
+                      variant={affichage === 'liste' ? 'primary' : 'outline-secondary'}
+                      title="Liste compacte"
+                      onClick={() => changerAffichage('liste')}
+                    >
+                      <i className="bi bi-list-ul"></i>
+                    </Button>
+                    <Button
+                      variant={affichage === 'detail' ? 'primary' : 'outline-secondary'}
+                      title="Fiches détaillées"
+                      onClick={() => changerAffichage('detail')}
+                    >
+                      <i className="bi bi-card-text"></i>
+                    </Button>
+                  </ButtonGroup>
+                </Col>
               </Row>
 
               {chargementProduits ? (
@@ -425,7 +535,8 @@ function PosInner() {
                   Aucun produit actif. Le propriétaire configure le catalogue
                   dans « Produits ».
                 </div>
-              ) : (
+              ) : affichage === 'grille' ? (
+                /* ---- Vue grille : cartes compactes ---- */
                 <Row xs={2} sm={3} xl={4} className="g-2">
                   {produits.map((p) => (
                     <Col key={p._id}>
@@ -451,7 +562,85 @@ function PosInner() {
                           <div className="text-muted" style={{ fontSize: '0.7rem' }}>
                             {p.code}
                           </div>
+                          <div>{indicateurStock(p)}</div>
                         </Card.Body>
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              ) : affichage === 'liste' ? (
+                /* ---- Vue liste : lignes denses, rapide à parcourir ---- */
+                <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+                  <Table hover size="sm" className="mb-0 align-middle" style={{ fontSize: '0.85rem' }}>
+                    <tbody>
+                      {produits.map((p) => (
+                        <tr key={p._id} role="button" onClick={() => ajouter(p)} style={{ cursor: 'pointer' }}>
+                          <td style={{ width: 46 }} className="text-center">
+                            {p.image ? (
+                              <img src={p.image} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4 }} />
+                            ) : (
+                              <i className="bi bi-box text-muted"></i>
+                            )}
+                          </td>
+                          <td>
+                            <div className="fw-semibold">{p.designation}</div>
+                            <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                              {p.code}
+                              {p.categorie?.libelle ? ` · ${p.categorie.libelle}` : ''}
+                            </div>
+                          </td>
+                          <td className="text-end">{indicateurStock(p, true)}</td>
+                          <td className="text-end fw-bold text-success" style={{ width: 90 }}>
+                            {fmtMontant(prixApplique(p, kiosqueId))} F
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              ) : (
+                /* ---- Vue détaillée : fiches riches par produit ---- */
+                <Row xs={1} md={2} className="g-2">
+                  {produits.map((p) => (
+                    <Col key={p._id}>
+                      <Card role="button" className="h-100" onClick={() => ajouter(p)}>
+                        <Row className="g-0 h-100">
+                          <Col xs={3} className="d-flex align-items-center justify-content-center">
+                            {p.image ? (
+                              <img
+                                src={p.image}
+                                alt=""
+                                style={{ width: '100%', height: '100%', maxHeight: 110, objectFit: 'cover', borderTopLeftRadius: 'var(--bs-card-inner-border-radius)', borderBottomLeftRadius: 'var(--bs-card-inner-border-radius)' }}
+                              />
+                            ) : (
+                              <i className="bi bi-box fs-2 text-muted"></i>
+                            )}
+                          </Col>
+                          <Col xs={9}>
+                            <Card.Body className="p-2">
+                              <div className="fw-semibold">{p.designation}</div>
+                              {p.description && (
+                                <div className="text-muted small text-truncate" title={p.description}>
+                                  {p.description}
+                                </div>
+                              )}
+                              <div className="d-flex flex-wrap gap-1 my-1">
+                                {p.categorie?.libelle && (
+                                  <Badge bg="light" text="dark" className="border">{p.categorie.libelle}</Badge>
+                                )}
+                                <Badge bg="light" text="dark" className="border">{p.typeProduit === 'REVENTE' ? 'Revente' : p.typeProduit === 'MIXTE' ? 'Mixte' : 'Fabriqué'}</Badge>
+                              </div>
+                              <div className="small text-muted">
+                                {p.code}
+                                {p.codeBarre && <span className="ms-2"><i className="bi bi-upc-scan me-1"></i>{p.codeBarre}</span>}
+                              </div>
+                              <div className="d-flex justify-content-between align-items-center mt-1">
+                                <span className="text-success fw-bold">{fmtMontant(prixApplique(p, kiosqueId))} F</span>
+                                {indicateurStock(p)}
+                              </div>
+                            </Card.Body>
+                          </Col>
+                        </Row>
                       </Card>
                     </Col>
                   ))}
@@ -462,7 +651,9 @@ function PosInner() {
         </Col>
 
         {/* ============ ZONES 2+3 : panier + paiement ============ */}
+        {/* sticky : le panier reste visible quand on scrolle la liste produits */}
         <Col lg={5} xl={4}>
+          <div style={{ position: 'sticky', top: '0.75rem' }}>
           <Card className="mb-3">
             <Card.Header className="fw-semibold py-2">
               <i className="bi bi-basket me-2"></i>Panier
@@ -705,6 +896,7 @@ function PosInner() {
               )}
             </Card.Body>
           </Card>
+          </div>
         </Col>
       </Row>
 
@@ -745,11 +937,24 @@ function PosInner() {
         <Modal.Body className="bg-light">
           {ticket && <TicketVente ref={ticketRef} ticket={ticket} />}
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" size="sm" onClick={() => setTicket(null)}>Fermer</Button>
-          <Button variant="primary" size="sm" onClick={() => imprimer()}>
-            <i className="bi bi-printer me-1"></i>Imprimer
-          </Button>
+        <Modal.Footer className="justify-content-between">
+          <span className="text-muted small">
+            {ticket?.imprimable === false && (
+              <><i className="bi bi-lock me-1"></i>Caisse clôturée — réimpression verrouillée.</>
+            )}
+          </span>
+          <div>
+            <Button variant="secondary" size="sm" className="me-2" onClick={() => setTicket(null)}>Fermer</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => imprimer()}
+              disabled={ticket?.imprimable === false}
+              title={ticket?.imprimable === false ? 'Caisse clôturée — ticket consultable uniquement' : undefined}
+            >
+              <i className="bi bi-printer me-1"></i>Imprimer
+            </Button>
+          </div>
         </Modal.Footer>
       </Modal>
     </RoleGuard>

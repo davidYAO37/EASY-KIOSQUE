@@ -16,6 +16,7 @@ export type ServiceCode =
   | "kiosques"
   | "ventes"
   | "produits"
+  | "stock"
   | "clients"
   | "credits"
   | "caisse"
@@ -30,6 +31,7 @@ export const ALL_SERVICE_CODES: ServiceCode[] = [
   "kiosques",
   "ventes",
   "produits",
+  "stock",
   "clients",
   "credits",
   "caisse",
@@ -140,6 +142,16 @@ export const PERMISSION_ACTIONS = [
     modules: ["produits"],
   },
   {
+    code: "consulter_stock",
+    label: "Consulter les niveaux et mouvements de stock",
+    modules: ["stock"],
+  },
+  {
+    code: "gestion_stock",
+    label: "Enregistrer entrées et ajustements de stock",
+    modules: ["stock"],
+  },
+  {
     code: "gerer_kiosques",
     label: "Créer et modifier les kiosques",
     modules: ["kiosques"],
@@ -169,6 +181,7 @@ export const ROLE_SERVICES: Record<string, ServiceCode[]> = {
     "kiosques",
     "ventes",
     "produits",
+    "stock",
     "clients",
     "credits",
     "caisse",
@@ -180,6 +193,7 @@ export const ROLE_SERVICES: Record<string, ServiceCode[]> = {
     "accueil",
     "ventes",
     "produits",
+    "stock",
     "clients",
     "credits",
     "caisse",
@@ -188,7 +202,7 @@ export const ROLE_SERVICES: Record<string, ServiceCode[]> = {
   ],
   caissier: ["accueil", "ventes", "clients", "caisse"],
   vendeur: ["accueil", "ventes", "clients", "caisse"],
-  comptable: ["accueil", "clients", "credits", "caisse", "depenses", "rapports"],
+  comptable: ["accueil", "produits", "stock", "clients", "credits", "caisse", "depenses", "rapports"],
 };
 
 /** Actions accordées par défaut à chaque rôle (hors personnalisation). */
@@ -213,6 +227,8 @@ export const ROLE_ACTIONS: Record<string, string[]> = {
     "gerer_produits",
     "gerer_kiosques",
     "parametrage_general",
+    "consulter_stock",
+    "gestion_stock",
   ],
   responsable: [
     "enregistrer_vente",
@@ -226,6 +242,8 @@ export const ROLE_ACTIONS: Record<string, string[]> = {
     "declarer_remise",
     "confirmer_remise",
     "consulter_rapports",
+    "consulter_stock",
+    "gestion_stock",
   ],
   caissier: [
     "enregistrer_vente",
@@ -248,6 +266,7 @@ export const ROLE_ACTIONS: Record<string, string[]> = {
     "enregistrer_remboursement",
     "consulter_rapports",
     "export_donnees",
+    "consulter_stock",
   ],
 };
 
@@ -267,12 +286,30 @@ export const TENANT_ROLES = Object.keys(ROLE_LABELS).filter(
   (r) => r !== "adminsuper"
 );
 
+/** Libellés d'affichage des services (= entrées du menu). */
+export const SERVICE_LABELS: Record<ServiceCode, string> = {
+  accueil: "Tableau de bord",
+  kiosques: "Mes kiosques",
+  ventes: "Ventes (POS)",
+  produits: "Produits et catégories",
+  stock: "Stock",
+  clients: "Clients",
+  credits: "Crédits clients",
+  caisse: "Gestion des caisses",
+  depenses: "Dépenses",
+  rapports: "Rapports",
+  utilisateurs: "Utilisateurs et profils",
+  parametres: "Paramètres",
+  plateforme: "Plateforme (réservé)",
+};
+
 /** Page d'accueil par service, pour la redirection après connexion. */
 export const SERVICE_HOME: Record<string, string> = {
   accueil: "/dashboard",
   kiosques: "/dashboard/kiosques",
   ventes: "/dashboard/ventes",
   produits: "/dashboard/produits",
+  stock: "/dashboard/stock",
   clients: "/dashboard/clients",
   credits: "/dashboard/credits",
   caisse: "/dashboard/caisse",

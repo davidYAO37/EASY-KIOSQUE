@@ -626,7 +626,12 @@ function HistoriqueInner() {
           )}
         </Modal.Body>
         <Modal.Footer>
-          {detail?.statutVente === 'validee' && !enAttenteVentes.has(detail._id) && (
+          {detail?.statutVente === 'validee' && detail.caisseVerrouillee && (
+            <Badge bg="secondary" className="me-auto">
+              <i className="bi bi-lock me-1"></i>Caisse pointée ou clôturée — annulation impossible
+            </Badge>
+          )}
+          {detail?.statutVente === 'validee' && !detail.caisseVerrouillee && !enAttenteVentes.has(detail._id) && (
             peutAnnuler ? (
               <Button variant="danger" size="sm" onClick={() => { setModeDemande(false); setShowAnnulation(true); }}>
                 <i className="bi bi-x-octagon me-1"></i>Annuler la vente
@@ -676,11 +681,24 @@ function HistoriqueInner() {
         <Modal.Body className="bg-light">
           {ticket && <TicketVente ref={ticketRef} ticket={ticket} />}
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" size="sm" onClick={() => setTicket(null)}>Fermer</Button>
-          <Button variant="primary" size="sm" onClick={() => imprimer()}>
-            <i className="bi bi-printer me-1"></i>Imprimer
-          </Button>
+        <Modal.Footer className="justify-content-between">
+          <span className="text-muted small">
+            {ticket?.imprimable === false && (
+              <><i className="bi bi-lock me-1"></i>Caisse clôturée — réimpression verrouillée.</>
+            )}
+          </span>
+          <div>
+            <Button variant="secondary" size="sm" className="me-2" onClick={() => setTicket(null)}>Fermer</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => imprimer()}
+              disabled={ticket?.imprimable === false}
+              title={ticket?.imprimable === false ? 'Caisse clôturée — ticket consultable uniquement' : undefined}
+            >
+              <i className="bi bi-printer me-1"></i>Imprimer
+            </Button>
+          </div>
         </Modal.Footer>
       </Modal>
     </RoleGuard>

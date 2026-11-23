@@ -92,8 +92,9 @@ export async function creerDemande(
     );
   }
 
-  // Jamais après la clôture : la vente appartient à une caisse déjà arrêtée,
-  // sa correction relève du propriétaire, pas d'une demande d'opérateur.
+  // Jamais quand la caisse n'est plus ouverte (point déclaré ou clôture) :
+  // la vente appartient à un arrêté déjà compté, sa correction relève
+  // d'une réouverture de session, pas d'une demande d'opérateur.
   const mvt = await MouvementCaisse.findOne({
     entrepriseId: vente.entrepriseId,
     venteId: vente._id,
@@ -103,9 +104,9 @@ export async function creerDemande(
     const session = await SessionCaisse.findById(mvt.sessionCaisseId)
       .select("statut")
       .lean();
-    if (session?.statut === "cloturee") {
+    if (session && session.statut !== "ouverte") {
       errHttp(
-        "La caisse de cette vente est clôturée — demande impossible.",
+        "La caisse de cette vente est pointée ou clôturée — demande impossible.",
         400,
         "CAISSE_CLOTUREE"
       );

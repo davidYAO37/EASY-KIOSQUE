@@ -148,7 +148,7 @@ export default function Home() {
               <li className="nav-item"><a className="nav-link ek-nav-actif" href="#accueil">Accueil</a></li>
               <li className="nav-item"><a className="nav-link" href="#fonctionnalites">Fonctionnalités</a></li>
               <li className="nav-item"><a className="nav-link" href="#avantages">Avantages</a></li>
-             {/*  <li className="nav-item"><a className="nav-link" href="#tarifs">Tarifs</a></li> */}
+            <li className="nav-item"><a className="nav-link" href="#tarifs">Tarifs</a></li>
               <li className="nav-item"><a className="nav-link" href="#contact">Contact</a></li>
             </ul>
             <div className="d-flex gap-2 py-2 py-lg-0">
@@ -269,7 +269,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Tarifs 
+      {/* Tarifs */}
       <section id="tarifs" className="py-5">
         <div className="container">
           <h2 className="text-center fw-bold mb-1">Tarifs simples et transparents</h2>
@@ -313,7 +313,7 @@ export default function Home() {
           </div>
           <p className="text-center small text-muted mt-4">Paiement par Wave, Orange Money ou MTN MoMo.</p>
         </div>
-      </section>*/}
+      </section>
 
       {/* Contact / appel à l'action */}
       <section id="contact" className="py-5 text-white" style={{ background: `linear-gradient(135deg, var(--ek-green) 0%, var(--ek-green-dark) 100%)` }}>

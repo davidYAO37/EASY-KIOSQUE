@@ -21,4 +21,6 @@ export { SessionCaisse } from "./sessionCaisse";
 export { Remise } from "./remise";
 export { CategorieDepense } from "./categorieDepense";
 export { Depense } from "./depense";
+export { StockKiosque } from "./stockKiosque";
+export { MouvementStock } from "./mouvementStock";
 export { TokenReset } from "./tokenReset";

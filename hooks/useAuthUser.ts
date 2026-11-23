@@ -29,6 +29,7 @@ export interface AuthEntreprise {
   logo?: string;
   statut?: string;
   abonnement?: { planCode: string; planNom: string; statut: string; expireLe: string; joursRestants: number };
+  stock?: { actif: boolean; venteSansStockAutorisee: boolean };
 }
 
 /** Récupère l'utilisateur connecté via /api/me (cookie JWT). */

@@ -8,7 +8,7 @@ import { useAuthUser } from '@/hooks/useAuthUser';
 import { useLecture } from '@/hooks/useLecture';
 import RoleGuard from '@/components/RoleGuard';
 import PermissionsModal, { type PermissionsValue } from '@/components/PermissionsModal';
-import { ROLE_LABELS, TENANT_ROLES } from '@/lib/permissions';
+import { ROLE_LABELS, ROLE_SERVICES, ROLE_ACTIONS, PERMISSION_ACTIONS, SERVICE_LABELS, TENANT_ROLES } from '@/lib/permissions';
 
 interface KiosqueLite { _id: string; code: string; designation: string }
 interface ProfilLite { _id: string; profil: string; type?: string }
@@ -263,6 +263,38 @@ function UtilisateursInner() {
                 </Form.Group>
               </div>
             </div>
+
+            {/* Droits par défaut du rôle choisi — référence avant personnalisation */}
+            <details className="mb-3 small">
+              <summary className="text-muted" style={{ cursor: 'pointer' }}>
+                <i className="bi bi-info-circle me-1"></i>
+                Voir les droits par défaut du rôle « {ROLE_LABELS[form.type] || form.type} »
+              </summary>
+              <div className="border rounded p-2 mt-1 bg-light">
+                <div className="mb-2">
+                  <span className="text-muted d-block mb-1">Entrées du menu :</span>
+                  {(ROLE_SERVICES[form.type] || []).map((s) => (
+                    <Badge key={s} bg="secondary" className="me-1 mb-1">
+                      {SERVICE_LABELS[s as keyof typeof SERVICE_LABELS] || s}
+                    </Badge>
+                  ))}
+                </div>
+                <div>
+                  <span className="text-muted d-block mb-1">Actions sensibles :</span>
+                  {ROLE_ACTIONS[form.type]?.includes('*') ? (
+                    <Badge bg="danger">Toutes les actions</Badge>
+                  ) : (ROLE_ACTIONS[form.type] || []).length === 0 ? (
+                    <span className="text-muted fst-italic">Aucune action sensible</span>
+                  ) : (
+                    (ROLE_ACTIONS[form.type] || []).map((a) => (
+                      <Badge key={a} bg="light" text="dark" className="border me-1 mb-1">
+                        {PERMISSION_ACTIONS.find((x) => x.code === a)?.label || a}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+            </details>
 
             <Form.Group className="mb-3">
               <Form.Label>Kiosques affectés <span className="text-muted">(vide = tous)</span></Form.Label>

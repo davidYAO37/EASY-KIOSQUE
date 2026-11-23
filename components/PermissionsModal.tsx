@@ -4,23 +4,8 @@ import { Modal, Button, Form } from "react-bootstrap";
 import {
   ALL_SERVICE_CODES,
   PERMISSION_ACTIONS,
-  type ServiceCode,
+  SERVICE_LABELS,
 } from "@/lib/permissions";
-
-const SERVICE_LABELS: Record<ServiceCode, string> = {
-  accueil: "Tableau de bord",
-  kiosques: "Mes kiosques",
-  ventes: "Ventes (POS)",
-  produits: "Produits et catégories",
-  clients: "Clients",
-  credits: "Crédits clients",
-  caisse: "Gestion des caisses",
-  depenses: "Dépenses",
-  rapports: "Rapports",
-  utilisateurs: "Utilisateurs et profils",
-  parametres: "Paramètres",
-  plateforme: "Plateforme (réservé)",
-};
 
 export interface PermissionsValue {
   customized: boolean;

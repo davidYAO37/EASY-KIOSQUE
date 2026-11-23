@@ -9,11 +9,13 @@ import { Kiosque } from "@/models/kiosque";
 import { Entreprise } from "@/models/entreprise";
 import { Notification } from "@/models/notification";
 import { MouvementCaisse } from "@/models/mouvementCaisse";
+import { SessionCaisse } from "@/models/sessionCaisse";
 import { JournalActivite } from "@/models/journalActivite";
 import { nextNumero } from "@/lib/numero";
 import { exigerKiosque, kiosqueAccessible } from "@/lib/tenant";
 import { prixPourKiosque } from "./catalogue.service";
 import { sessionActive } from "./caisses.service";
+import { configStock, sortiesStockVente, retoursStockAnnulation } from "./stock.service";
 import { avecTransaction } from "@/lib/transaction";
 import type { CurrentUser } from "@/lib/auth";
 import type {
@@ -34,20 +36,43 @@ import type {
  *   date) et l'opération initiale est conservée.
  * - Notification propriétaire créée APRÈS commit effectif en base.
  */
-
+//retourne un ObjectId
 function oid(id: string | Types.ObjectId) {
   return new Types.ObjectId(String(id));
 }
-
+//retourne le nom complet d'un utilisateur
 function nomComplet(u: { nom?: string; prenom?: string }) {
   return [u.prenom, u.nom].filter(Boolean).join(" ").trim() || "Utilisateur";
 }
 
+//retourne une erreur http
 function errHttp(message: string, status = 400, code?: string): never {
   const e: any = new Error(message);
   e.status = status;
   if (code) e.code = code;
   throw e;
+}
+
+/**
+ * Vrai quand la session de caisse qui a encaissé la vente n'est plus
+ * ouverte (point déclaré ou clôture faite) : la vente reste visualisable
+ * mais plus annulable. Résolution via le mouvement de caisse lié à la
+ * vente — la vente elle-même ne porte pas de `sessionCaisseId`.
+ */
+async function caisseDeVenteVerrouillee(
+  eid: Types.ObjectId,
+  venteId: Types.ObjectId
+): Promise<boolean> {
+  const mvt = await MouvementCaisse.findOne({
+    entrepriseId: eid,
+    venteId,
+    sessionCaisseId: { $ne: null },
+  }).lean();
+  if (!mvt?.sessionCaisseId) return false; // pas de session liée = pas de verrou
+  const session = await SessionCaisse.findById(mvt.sessionCaisseId)
+    .select("statut")
+    .lean();
+  return !!session && session.statut !== "ouverte";
 }
 
 // ----------------------------- Lecture -----------------------------
@@ -251,7 +276,14 @@ export async function detailVente(
     .populate("kiosqueId", "code designation")
     .lean();
   if (!v) return null;
-  return versDTO(v, true);
+  const dto = await versDTO(v, true);
+  if (v.statutVente === "validee") {
+    dto.caisseVerrouillee = await caisseDeVenteVerrouillee(
+      oid(user.entrepriseId!),
+      v._id
+    );
+  }
+  return dto;
 }
 
 // --------------------------- Enregistrement ---------------------------
@@ -398,6 +430,9 @@ export async function enregistrerVente(
     }
   }
 
+  // 7b) Réglage stock de l'entreprise (lu avant la transaction)
+  const cfgStock = await configStock(eid);
+
   // 8) Transaction : tout ou rien
   const vendeurNom = nomComplet(user);
   const clientNom = client ? nomComplet({ nom: client.nom, prenom: client.prenoms }) : null;
@@ -455,6 +490,23 @@ export async function enregistrerVente(
           venteId,
         })),
         { session }
+      );
+
+      // Sorties de stock des produits REVENTE — même transaction que la
+      // vente : blocage STOCK_INSUFFISANT si l'entreprise l'exige.
+      await sortiesStockVente(
+        {
+          eid,
+          kiosqueId: kiosque._id,
+          lignes,
+          produitsParId: parId,
+          cfg: cfgStock,
+          venteId,
+          numeroVente,
+          userId: oid(user._id),
+          userNom: vendeurNom,
+        },
+        session
       );
 
       if (paiements.length) {
@@ -588,6 +640,17 @@ export async function annulerVente(
     errHttp("Cette vente est déjà annulée.", 409, "DEJA_ANNULEE");
   }
 
+  // Caisse pointée ou clôturée : la vente fait partie d'un arrêté déjà
+  // compté — plus annulable (demande d'opérateur ni annulation directe).
+  // Un point rejeté repasse la session à "ouverte" et déverrouille.
+  if (await caisseDeVenteVerrouillee(eid, vente._id)) {
+    errHttp(
+      "La caisse de cette vente est pointée ou clôturée — annulation impossible.",
+      400,
+      "CAISSE_CLOTUREE"
+    );
+  }
+
   const auteurNom = nomComplet(user);
   await avecTransaction(async (session) => {
       await Vente.updateOne(
@@ -640,6 +703,24 @@ export async function annulerVente(
         { $set: { statut: "annulee" } },
         { session }
       );
+
+      // Restitution de stock : les produits REVENTE reviennent dans le
+      // kiosque — même transaction, mouvements tracés.
+      const lignesVente = await LigneVente.find({ venteId: vente._id })
+        .session(session ?? null)
+        .lean();
+      await retoursStockAnnulation(
+        {
+          eid,
+          kiosqueId: vente.kiosqueId,
+          lignes: lignesVente,
+          venteId: vente._id,
+          numeroVente: vente.numeroVente,
+          userId: oid(user._id),
+          userNom: auteurNom,
+        },
+        session
+      );
   });
 
   await Notification.create({
@@ -679,11 +760,26 @@ export async function donneesTicket(
 ): Promise<TicketVente | null> {
   const vente = await detailVente(user, id);
   if (!vente) return null;
-  const [entreprise, kiosque] = await Promise.all([
+  const dateVente = new Date(vente.dateVente);
+  const [entreprise, kiosque, sessionVente] = await Promise.all([
     Entreprise.findById(user.entrepriseId)
       .select("nomSociete nomCommercial telephone adresse ville devise impression")
       .lean(),
     Kiosque.findById(vente.kiosqueId).select("code designation adresse").lean(),
+    // Session de caisse qui accueillait la vente (ouverte avant elle et pas
+    // encore clôturée à sa date) — sert à verrouiller la réimpression.
+    SessionCaisse.findOne({
+      entrepriseId: user.entrepriseId,
+      kiosqueId: oid(vente.kiosqueId),
+      dateOuverture: { $lte: dateVente },
+      $or: [
+        { "cloture.dateCloture": { $gte: dateVente } },
+        { "cloture.dateCloture": null },
+      ],
+    })
+      .sort({ dateOuverture: -1 })
+      .select("statut")
+      .lean(),
   ]);
   return {
     entreprise: {
@@ -699,5 +795,9 @@ export async function donneesTicket(
     },
     vente,
     impression: entreprise?.impression || undefined,
+    // Imprimable tant que la caisse de la vente est encore ouverte ;
+    // après le point (en_cloture) ou la clôture, le ticket reste
+    // consultable mais ne peut plus être réimprimé.
+    imprimable: !sessionVente || sessionVente.statut === "ouverte",
   };
 }

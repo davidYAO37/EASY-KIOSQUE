@@ -32,6 +32,14 @@ export interface IEntreprise extends Document {
     impressionAuto?: boolean;
   };
 
+  // Gestion de stock (par kiosque, produits REVENTE uniquement).
+  // actif = suivi activé ; venteSansStockAutorisee = vendre même en rupture
+  // (stock négatif) plutôt que bloquer la vente.
+  stock?: {
+    actif?: boolean;
+    venteSansStockAutorisee?: boolean;
+  };
+
   /** Délai (en heures) pour demander l'annulation d'une vente. 0 = pas de limite. */
   delaiDemandeAnnulationH?: number;
 
@@ -59,6 +67,11 @@ const EntrepriseSchema = new Schema<IEntreprise>(
       imprimanteDefaut: { type: String },
       format: { type: String, enum: ["thermique80", "a4"], default: "thermique80" },
       impressionAuto: { type: Boolean, default: false },
+    },
+
+    stock: {
+      actif: { type: Boolean, default: false },
+      venteSansStockAutorisee: { type: Boolean, default: true },
     },
 
     // Fenêtre de demande d'annulation d'une vente (heures) — 0 = sans limite.

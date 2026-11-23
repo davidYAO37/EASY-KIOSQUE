@@ -40,8 +40,60 @@ export const entrepriseUpdateSchema = z.object({
       impressionAuto: z.boolean().optional(),
     })
     .optional(),
+  stock: z
+    .object({
+      actif: z.boolean().optional(),
+      venteSansStockAutorisee: z.boolean().optional(),
+    })
+    .optional(),
   delaiDemandeAnnulationH: z.number().int().min(0).max(720).optional(),
 });
+
+// ---------- Stock (par kiosque, produits REVENTE) ----------
+
+export const stockEntreeSchema = z.union([
+  z.object({
+    kiosqueId: z.string().min(1),
+    produitId: z.string().min(1),
+    quantite: z.number().int().positive().max(1_000_000),
+    motif: z.string().trim().max(300).optional().or(z.literal("")),
+  }),
+  z.object({
+    kiosqueId: z.string().min(1),
+    motif: z.string().trim().max(300).optional().or(z.literal("")),
+    lignes: z
+      .array(
+        z.object({
+          produitId: z.string().min(1),
+          quantite: z.number().int().positive().max(1_000_000),
+        })
+      )
+      .min(1)
+      .max(500),
+  }),
+]);
+
+export const stockAjustementSchema = z.union([
+  z.object({
+    kiosqueId: z.string().min(1),
+    produitId: z.string().min(1),
+    nouvelleQuantite: z.number().int().min(0).max(1_000_000),
+    motif: z.string().trim().min(3).max(300),
+  }),
+  z.object({
+    kiosqueId: z.string().min(1),
+    motif: z.string().trim().min(3).max(300),
+    lignes: z
+      .array(
+        z.object({
+          produitId: z.string().min(1),
+          nouvelleQuantite: z.number().int().min(0).max(1_000_000),
+        })
+      )
+      .min(1)
+      .max(500),
+  }),
+]);
 
 export const kiosqueSchema = z.object({
   code: z.string().trim().max(20).optional().or(z.literal("")),
@@ -100,11 +152,13 @@ export const prixKiosqueSchema = z.object({
 
 export const produitSchema = z.object({
   code: z.string().trim().max(30).optional().or(z.literal("")),
+  codeBarre: z.string().trim().max(30).optional().or(z.literal("")).or(z.null()),
   designation: z.string().trim().min(2).max(150),
   categorieId: z.string().optional().or(z.literal("")).or(z.null()),
   typeProduit: z.enum(["FABRIQUE", "REVENTE", "MIXTE"]).optional(),
   prixAchat: z.number().min(0).optional().or(z.null()),
   prixVente: z.number().min(0),
+  seuilAlerte: z.number().int().min(0).max(1_000_000).optional().or(z.null()),
   description: z.string().trim().max(500).optional().or(z.literal("")),
   image: z.string().max(700_000).optional().or(z.literal("")), // data URI ≤ ~500 Ko
   prixKiosques: z.array(prixKiosqueSchema).max(500).optional(),

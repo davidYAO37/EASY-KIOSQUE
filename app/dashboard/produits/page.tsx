@@ -15,14 +15,14 @@ const TYPES = { FABRIQUE: 'Fabriqué', REVENTE: 'Revente', MIXTE: 'Mixte' } as c
 interface KiosqueLite { _id: string; code: string; designation: string }
 
 interface FormProduit {
-  code: string; designation: string; categorieId: string;
+  code: string; codeBarre: string; designation: string; categorieId: string;
   typeProduit: 'FABRIQUE' | 'REVENTE' | 'MIXTE';
-  prixAchat: string; prixVente: string; description: string; image: string;
+  prixAchat: string; prixVente: string; seuilAlerte: string; description: string; image: string;
 }
 
 const VIDE: FormProduit = {
-  code: '', designation: '', categorieId: '', typeProduit: 'REVENTE',
-  prixAchat: '', prixVente: '', description: '', image: '',
+  code: '', codeBarre: '', designation: '', categorieId: '', typeProduit: 'REVENTE',
+  prixAchat: '', prixVente: '', seuilAlerte: '', description: '', image: '',
 };
 
 function ProduitsInner() {
@@ -88,11 +88,13 @@ function ProduitsInner() {
       p
         ? {
             code: p.code || '',
+            codeBarre: p.codeBarre || '',
             designation: p.designation || '',
             categorieId: p.categorieId || '',
             typeProduit: p.typeProduit || 'REVENTE',
             prixAchat: p.prixAchat != null ? String(p.prixAchat) : '',
             prixVente: String(p.prixVente ?? ''),
+            seuilAlerte: p.seuilAlerte != null ? String(p.seuilAlerte) : '',
             description: p.description || '',
             image: p.image || '',
           }
@@ -133,11 +135,13 @@ function ProduitsInner() {
     try {
       const payload: any = {
         code: form.code || undefined,
+        codeBarre: form.codeBarre.trim() || null,
         designation: form.designation,
         categorieId: form.categorieId || null,
         typeProduit: form.typeProduit,
         prixAchat: form.prixAchat === '' ? null : Number(form.prixAchat),
         prixVente: Number(form.prixVente),
+        seuilAlerte: form.seuilAlerte === '' ? null : Number(form.seuilAlerte),
         description: form.description || undefined,
         image: form.image || undefined,
         prixKiosques: Object.entries(prixKiosques)
@@ -376,7 +380,7 @@ function ProduitsInner() {
           </Modal.Header>
           <Modal.Body>
             <div className="row">
-              <div className="col-md-8">
+              <div className="col-md-4">
                 <Form.Group className="mb-3">
                   <Form.Label>Désignation *</Form.Label>
                   <Form.Control value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} required />
@@ -389,6 +393,16 @@ function ProduitsInner() {
                     value={form.code}
                     onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
                     placeholder="Auto (P0001)"
+                  />
+                </Form.Group>
+              </div>
+              <div className="col-md-4">
+                <Form.Group className="mb-3">
+                  <Form.Label>Code-barres</Form.Label>
+                  <Form.Control
+                    value={form.codeBarre}
+                    onChange={(e) => setForm({ ...form, codeBarre: e.target.value.trim() })}
+                    placeholder="Scan en vente (EAN-13…)"
                   />
                 </Form.Group>
               </div>
@@ -438,6 +452,17 @@ function ProduitsInner() {
                 </Form.Group>
               </div>
             </div>
+            {form.typeProduit === 'REVENTE' && (
+              <Form.Group className="mb-3">
+                <Form.Label>Seuil d'alerte stock bas <small className="text-muted">(facultatif — si gestion de stock activée)</small></Form.Label>
+                <Form.Control
+                  type="number" min={0}
+                  value={form.seuilAlerte}
+                  onChange={(e) => setForm({ ...form, seuilAlerte: e.target.value })}
+                  placeholder="Ex : 10 — alerte quand le stock atteint ce niveau"
+                />
+              </Form.Group>
+            )}
             <Form.Group className="mb-3">
               <Form.Label>Description</Form.Label>
               <Form.Control as="textarea" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />

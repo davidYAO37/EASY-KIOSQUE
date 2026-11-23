@@ -42,6 +42,7 @@ const MENU: { title?: string; items: MenuItem[] }[] = [
     items: [
       { label: "Produits", href: "/dashboard/produits", icon: "bi-box-seam", service: "produits" },
       { label: "Catégories", href: "/dashboard/categories", icon: "bi-tags", service: "produits" },
+      { label: "Stock", href: "/dashboard/stock", icon: "bi-boxes", service: "stock" },
     ],
   },
   {

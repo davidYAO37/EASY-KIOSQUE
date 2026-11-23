@@ -63,6 +63,12 @@ export interface VenteDTO {
   annulation?: AnnulationDTO | null;
   lignes?: LigneVenteDTO[];
   paiements?: PaiementDTO[];
+  /**
+   * `true` quand la session de caisse de la vente n'est plus ouverte
+   * (point déclaré ou clôture faite) : la vente reste visualisable mais
+   * ni annulable ni sujette à une demande d'annulation.
+   */
+  caisseVerrouillee?: boolean;
 }
 
 export interface ListeVentes {
@@ -130,4 +136,10 @@ export interface TicketVente {
   vente: VenteDTO;
   /** Préférence d'impression de l'entreprise (imprimante + format + auto). */
   impression?: { imprimanteDefaut?: string; format?: "thermique80" | "a4"; impressionAuto?: boolean };
+  /**
+   * `false` quand la session de caisse de la vente n'est plus ouverte
+   * (point déclaré ou clôture faite) : la vente reste visualisable mais
+   * le ticket ne doit plus être réimprimé.
+   */
+  imprimable?: boolean;
 }

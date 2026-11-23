@@ -143,6 +143,7 @@ export async function supprimerCategorie(entrepriseId: string, id: string) {
 export interface FiltresProduits {
   q?: string;
   categorieId?: string;
+  codeBarre?: string;
   typeProduit?: string;
   statut?: string;
   page?: number;
@@ -151,9 +152,13 @@ export interface FiltresProduits {
 
 function filtreProduits(entrepriseId: string, f: FiltresProduits) {
   const filtre: any = { entrepriseId: oid(entrepriseId) };
+  // Recherche exacte par code-barres (scan POS) — prioritaire sur le texte libre.
+  if (f.codeBarre) {
+    filtre.codeBarre = f.codeBarre.trim();
+  }
   if (f.q) {
     const r = new RegExp(f.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    filtre.$or = [{ designation: r }, { code: r }, { description: r }];
+    filtre.$or = [{ designation: r }, { code: r }, { codeBarre: r }, { description: r }];
   }
   if (f.categorieId && Types.ObjectId.isValid(f.categorieId)) {
     filtre.categorieId = oid(f.categorieId);
@@ -218,6 +223,23 @@ export async function listerProduits(
   };
 }
 
+/** Code-barres unique par entreprise (quand renseigné) — le scan POS exige un seul candidat. */
+async function verifierCodeBarre(
+  eid: Types.ObjectId,
+  codeBarre: string | undefined | null,
+  saufId?: string
+) {
+  const cb = (codeBarre || "").trim();
+  if (!cb) return null;
+  const filtre: any = { entrepriseId: eid, codeBarre: cb };
+  if (saufId) filtre._id = { $ne: oid(saufId) };
+  const doublon = await Produit.findOne(filtre).select("designation").lean();
+  if (doublon) {
+    return `Le code-barres « ${cb} » est déjà attribué à « ${doublon.designation} ».`;
+  }
+  return null;
+}
+
 /** Valide categorieId + kiosqueIds (appartenance au tenant). */
 async function verifierRefs(entrepriseId: string, data: any) {
   const eid = oid(entrepriseId);
@@ -257,10 +279,17 @@ export async function creerProduit(entrepriseId: string, data: any) {
     err.status = 409;
     throw err;
   }
+  const cbErr = await verifierCodeBarre(eid, data.codeBarre);
+  if (cbErr) {
+    const err: any = new Error(cbErr);
+    err.status = 409;
+    throw err;
+  }
 
   const p = await Produit.create({
     entrepriseId: eid,
     code,
+    codeBarre: (data.codeBarre || "").trim() || undefined,
     designation: data.designation,
     categorieId: data.categorieId && Types.ObjectId.isValid(data.categorieId)
       ? oid(data.categorieId)
@@ -268,6 +297,7 @@ export async function creerProduit(entrepriseId: string, data: any) {
     typeProduit: data.typeProduit || "REVENTE",
     prixAchat: data.prixAchat ?? null,
     prixVente: data.prixVente,
+    seuilAlerte: data.seuilAlerte ?? null,
     description: data.description || undefined,
     image: data.image || undefined,
     prixKiosques: (data.prixKiosques || []).map((pk: any) => ({
@@ -300,6 +330,17 @@ export async function majProduit(entrepriseId: string, id: string, data: any) {
       const err: any = new Error(`Le code produit « ${$set.code} » existe déjà.`);
       err.status = 409;
       throw err;
+    }
+  }
+  if ($set.codeBarre !== undefined) {
+    $set.codeBarre = ($set.codeBarre || "").trim() || null;
+    if ($set.codeBarre) {
+      const cbErr = await verifierCodeBarre(eid, $set.codeBarre, id);
+      if (cbErr) {
+        const err: any = new Error(cbErr);
+        err.status = 409;
+        throw err;
+      }
     }
   }
   if ($set.categorieId !== undefined) {
@@ -353,6 +394,7 @@ const norm = (s: any) =>
 
 const CLES: Record<string, string[]> = {
   code: ["code", "codeproduit", "ref", "reference"],
+  codeBarre: ["codebarre", "codebarres", "barcode", "ean", "ean13", "gtin"],
   designation: ["designation", "libelle", "produit", "nom"],
   categorie: ["categorie", "famille"],
   type: ["type", "typeproduit"],
@@ -458,6 +500,7 @@ export async function importerProduits(
         typeProduit,
         prixAchat,
         prixVente,
+        codeBarre: String(lireColonne(row, "codeBarre") ?? "").trim() || undefined,
         description: String(lireColonne(row, "description") ?? "").trim() || undefined,
       };
 
@@ -489,6 +532,7 @@ export async function exporterProduits(
 
   const lignes = produits.map((p: any) => ({
     Code: p.code,
+    "Code barre": p.codeBarre || "",
     "Désignation": p.designation,
     "Catégorie": p.categorieId?.libelle || "",
     Type: p.typeProduit,
@@ -500,7 +544,7 @@ export async function exporterProduits(
 
   const ws = XLSX.utils.json_to_sheet(lignes);
   ws["!cols"] = [
-    { wch: 12 }, { wch: 34 }, { wch: 20 }, { wch: 12 },
+    { wch: 12 }, { wch: 16 }, { wch: 34 }, { wch: 20 }, { wch: 12 },
     { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 10 },
   ];
   const wb = XLSX.utils.book_new();

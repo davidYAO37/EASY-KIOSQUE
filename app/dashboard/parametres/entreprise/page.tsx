@@ -21,6 +21,7 @@ interface Entreprise {
   devise?: string;
   statut?: string;
   impression?: { imprimanteDefaut?: string; format?: string; impressionAuto?: boolean };
+  stock?: { actif?: boolean; venteSansStockAutorisee?: boolean };
   delaiDemandeAnnulationH?: number;
   createdAt?: string;
 }
@@ -67,6 +68,10 @@ function EntrepriseInner() {
           imprimanteDefaut: form.impression?.imprimanteDefaut || '',
           format: form.impression?.format || 'thermique80',
           impressionAuto: !!form.impression?.impressionAuto,
+        },
+        stock: {
+          actif: !!form.stock?.actif,
+          venteSansStockAutorisee: form.stock?.venteSansStockAutorisee !== false,
         },
       }, { withCredentials: true });
       setEntreprise(res.data?.entreprise || null);
@@ -239,6 +244,39 @@ function EntrepriseInner() {
             />
             <Form.Text className="text-muted d-block mb-2">
               La boîte de dialogue d'impression s'ouvre directement, sans afficher le ticket à l'écran — le vendeur n'a qu'à confirmer. S'applique à tous les kiosques.
+            </Form.Text>
+
+            <hr />
+            <h6 className="fw-semibold mb-3"><i className="bi bi-boxes me-2"></i>Gestion de stock</h6>
+            <Form.Check
+              type="switch"
+              id="stock-actif"
+              label="Activer le suivi de stock par kiosque"
+              checked={!!form.stock?.actif}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, stock: { ...f.stock, actif: e.target.checked } }))
+              }
+              disabled={!peutModifier}
+              className="mb-2"
+            />
+            <Form.Text className="text-muted d-block mb-3">
+              Seuls les produits de type « revente » sont suivis : chaque vente décrémente le stock du
+              kiosque, chaque annulation le restitue. Les entrées et ajustements se font depuis la page Stock.
+            </Form.Text>
+            <Form.Check
+              type="switch"
+              id="stock-sans-stock"
+              label="Autoriser les ventes même quand le stock est épuisé (stock négatif)"
+              checked={form.stock?.venteSansStockAutorisee !== false}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, stock: { ...f.stock, venteSansStockAutorisee: e.target.checked } }))
+              }
+              disabled={!peutModifier || !form.stock?.actif}
+              className="mb-2"
+            />
+            <Form.Text className="text-muted d-block mb-2">
+              Désactivé : une vente est refusée si le stock du kiosque est insuffisant. Activé : la vente
+              passe et le stock peut devenir négatif — à régulariser par une entrée ultérieure.
             </Form.Text>
 
             <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2">

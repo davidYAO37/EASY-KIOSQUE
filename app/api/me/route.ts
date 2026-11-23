@@ -25,6 +25,10 @@ export async function GET(req: NextRequest) {
         devise: ent.devise || "FCFA",
         logo: ent.logo,
         statut: ent.statut,
+        stock: {
+          actif: !!ent.stock?.actif,
+          venteSansStockAutorisee: ent.stock?.venteSansStockAutorisee !== false,
+        },
         abonnement: {
           planCode: abo.planCode,
           planNom: abo.planNom,

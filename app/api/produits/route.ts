@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const liste = await listerProduits(user!.entrepriseId!, {
     q: sp.get("q") || undefined,
+    codeBarre: sp.get("codeBarre") || undefined,
     categorieId: sp.get("categorieId") || undefined,
     typeProduit: sp.get("typeProduit") || undefined,
     statut: sp.get("statut") || undefined,
